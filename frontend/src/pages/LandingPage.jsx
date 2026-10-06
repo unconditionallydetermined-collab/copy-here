@@ -16,7 +16,7 @@ export default function LandingPage() {
           </div>
         }>
           <Spline
-            scene="https://prod.spline.design/1e75aeea-f141-4b1e-a7ff-5f305a470b23/scene.splinecode"
+            scene="https://prod.spline.design/xsA3z9LUDPMCjCjQ/scene.splinecode"
             style={{ width: '100%', height: '100%' }}
           />
         </Suspense>
