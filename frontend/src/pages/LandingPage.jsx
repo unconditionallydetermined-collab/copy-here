@@ -1,8 +1,20 @@
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, Component } from 'react'
 import { Link } from 'react-router-dom'
 import { TrendingUp, ArrowRight, Sparkles } from 'lucide-react'
 
 const Spline = lazy(() => import('@splinetool/react-spline'))
+
+class SceneBoundary extends Component {
+  constructor(p) { super(p); this.state = { failed: false } }
+  static getDerivedStateFromError() { return { failed: true } }
+  componentDidCatch(e) { console.warn('3D scene failed to load:', e) }
+  render() {
+    if (this.state.failed) {
+      return <div className="w-full h-full" style={{ background: 'radial-gradient(ellipse at center, #1e1b4b 0%, #0a0a0f 70%)' }} />
+    }
+    return this.props.children
+  }
+}
 
 export default function LandingPage() {
   return (
@@ -10,6 +22,7 @@ export default function LandingPage() {
 
       {/* ── Full-viewport Spline scene ── */}
       <div className="absolute inset-0 z-0">
+        <SceneBoundary>
         <Suspense fallback={
           <div className="w-full h-full flex items-center justify-center">
             <div className="w-10 h-10 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
@@ -20,6 +33,7 @@ export default function LandingPage() {
             style={{ width: '100%', height: '100%' }}
           />
         </Suspense>
+        </SceneBoundary>
       </div>
 
       {/* ── Vignette overlay (readable edges, transparent center) ── */}
