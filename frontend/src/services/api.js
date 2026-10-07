@@ -313,10 +313,3 @@ export const aiApi = {
 }
 
 export default api
-
-export const checklistApi = {
-  getAll: () => api.get('/checklist'),
-  add: (data) => api.post('/checklist', data),
-  update: (id, data) => api.put(`/checklist/${id}`, data),
-  delete: (id) => api.delete(`/checklist/${id}`),
-}

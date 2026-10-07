@@ -1,14 +1,13 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import {
-  ClipboardCheck, LayoutDashboard, User, FileText, Zap, Code2,
+  LayoutDashboard, User, FileText, Zap, Code2,
   FolderOpen, Award, Briefcase, Target, Bot, Globe,
   LogOut, X, TrendingUp, Bug
 } from 'lucide-react'
 import { Github, Linkedin } from './Icons'
 
 const navItems = [
-  { to: '/checklist',    icon: ClipboardCheck, label: 'Checklist' },
   { to: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/profile',      icon: User,            label: 'Profile' },
   { to: '/resume',       icon: FileText,        label: 'Resume' },
