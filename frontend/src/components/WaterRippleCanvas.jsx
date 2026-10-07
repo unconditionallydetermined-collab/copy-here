@@ -40,7 +40,7 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
       const now = performance.now()
       if (now - lastHapticTimeRef.current > 75) {
         lastHapticTimeRef.current = now
-        const hapticMs = Math.max(6, Math.min(22, Math.round(force * 0.9)))
+        const hapticMs = Math.max(35, Math.min(75, Math.round(force * 3.5)))
         triggerHaptic(hapticMs)
       }
     },
@@ -144,11 +144,11 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
 
     // Varying intensity haptic feedback for fluid wave / slam
     if (intensity >= 120) {
-      triggerHaptic([32, 22, 48])
+      triggerHaptic([90, 40, 130])
     } else if (intensity >= 70) {
-      triggerHaptic([18, 14, 26])
+      triggerHaptic([60, 30, 60])
     } else {
-      triggerHaptic(12)
+      triggerHaptic(50)
     }
 
     if (typeof onSlamRef.current === 'function') {
@@ -221,7 +221,7 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
         const now = performance.now()
         if (now - lastHapticTimeRef.current > 65) {
           lastHapticTimeRef.current = now
-          triggerHaptic(8)
+          triggerHaptic(45)
         }
       }
     }

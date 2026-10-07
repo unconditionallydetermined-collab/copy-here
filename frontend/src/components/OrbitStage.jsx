@@ -661,7 +661,7 @@ export default function OrbitStage({ onMounted, animationReady = true }) {
           </Link>
         </div>
         <p className="text-right">
-          &copy; {new Date().getFullYear()} CareerSync. All rights reserved.
+          &copy; {new Date().getFullYear()}. All rights reserved.
         </p>
       </footer>
     </div>
