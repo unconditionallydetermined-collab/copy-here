@@ -322,8 +322,8 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
       }
       ctx.restore()
 
-      // 6. Render dots with bold orbit glow
-      const LIGHT_RADIUS = 52
+      // 6. Render dots with shark-fin / comet wake only while in motion
+      const LIGHT_RADIUS = 58
       const LIGHT_RADIUS_SQ = LIGHT_RADIUS * LIGHT_RADIUS
 
       for (let i = 0; i < dots.length; i++) {
@@ -336,12 +336,23 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
 
         if (dimFactor > 0.01) {
           for (let l = 0; l < lights.length; l++) {
-            const lx = lights[l].x - dot.ox
-            const ly = lights[l].y - dot.oy
+            const light = lights[l]
+            // Only emit dynamic glow & wake disturbance when moving
+            if (!light.moving) continue
+
+            const lx = light.x - dot.ox
+            const ly = light.y - dot.oy
             const lDistSq = lx * lx + ly * ly
             if (lDistSq < LIGHT_RADIUS_SQ) {
-              const lFactor = (1 - Math.sqrt(lDistSq) / LIGHT_RADIUS) * dimFactor
-              energy = Math.max(energy, lFactor * 1.5)
+              const dist = Math.sqrt(lDistSq)
+              const lFactor = (1 - dist / LIGHT_RADIUS) * dimFactor
+              energy = Math.max(energy, lFactor * 1.8)
+
+              // Tapered wake disturbance
+              if (dist < 32 && dist > 2) {
+                dot.vx += (lx / dist) * 22 * dt
+                dot.vy += (ly / dist) * 22 * dt
+              }
             }
           }
         }

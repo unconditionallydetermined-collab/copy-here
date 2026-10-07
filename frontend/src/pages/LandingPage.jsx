@@ -150,22 +150,32 @@ export default function LandingPage() {
 
         const isPaused = Boolean(pausedAtApexRef.current || strikeProgressRef.current)
 
-        // Advance orbiting icons smoothly
+        // Advance orbiting icons with natural deceleration to rest at apex
         if (!isPaused) {
           activeOrbiters.forEach((id) => {
             const prevDeg = angles[id]
-            const nextDeg = (prevDeg + baseSpeed * delta) % 360
-            angles[id] = nextDeg
+            let speed = baseSpeed
 
-            // Check if candidate naturally arrived at apex (top of circle, above "Do you have")
+            // Natural deceleration when approaching apex
             if (candidate === id && !pausedAtApexRef.current && !strikeProgressRef.current) {
-              if ((prevDeg > 350 && nextDeg < 15) || (nextDeg >= 356 || nextDeg <= 4)) {
-                angles[id] = 0 // Top apex: x=0, y=-badgeRadius
+              const distToApex = (360 - prevDeg) % 360
+              if (distToApex <= 75 && distToApex > 0) {
+                // Easing down to zero velocity as it comes to rest
+                const progress = distToApex / 75
+                speed = baseSpeed * Math.max(0.06, Math.pow(progress, 1.25))
+              }
+
+              if (distToApex <= 1.2 || (prevDeg > 358 && prevDeg < 360) || nextDeg < 1.0) {
+                angles[id] = 0
                 pausedAtApexRef.current = id
-                addLog('APEX_ARRIVAL', { id, prevDeg: Math.round(prevDeg), nextDeg: Math.round(nextDeg), x: 0, y: -badgeRadius })
+                addLog('APEX_ARRIVAL', { id, prevDeg: Math.round(prevDeg), x: 0, y: -badgeRadius })
                 setPoweringId(id)
+                return
               }
             }
+
+            const nextDeg = (prevDeg + speed * delta) % 360
+            angles[id] = nextDeg
           })
         }
 
@@ -206,14 +216,20 @@ export default function LandingPage() {
             const x = Math.cos(rad) * badgeRadius
             const y = Math.sin(rad) * badgeRadius
 
+            const isPower = poweringId === id
+            const scale = isPower ? 1.15 : 1
             if (el) {
-              el.style.transform = `translate3d(${x}px, ${y}px, 0)`
+              el.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`
               el.style.opacity = '1'
             }
 
+            // Only moving icons emit dynamic disturbance & shark-fin wake
+            const isMoving = !isPaused && (!isPower)
             lights.push({
               x: centerX + x,
               y: centerY + y,
+              deg,
+              moving: isMoving,
             })
           } else if (el) {
             el.style.opacity = '0'
