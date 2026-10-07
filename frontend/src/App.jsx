@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { Toaster, toast as sonnerToast } from 'sonner'
+import { Toaster } from 'sonner'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import AppLayout from './components/AppLayout'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -8,7 +8,7 @@ import logger from './services/logger'
 
 import LandingPage   from './pages/LandingPage'
 import AboutPage     from './pages/AboutPage'
-import InfoPage      from './pages/InfoPage'
+import DownloadsPage from './pages/DownloadsPage'
 import AuthPage      from './pages/AuthPage'
 import Dashboard     from './pages/Dashboard'
 import ProfilePage   from './pages/ProfilePage'
@@ -24,6 +24,8 @@ import GoalsPage     from './pages/GoalsPage'
 import AIAssistant   from './pages/AIAssistant'
 import PortfolioPage from './pages/PortfolioPage'
 import DebugPage     from './pages/DebugPage'
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://career-sync-backend-71c1.onrender.com'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -44,7 +46,6 @@ function PublicRoute({ children }) {
   return user ? <Navigate to="/dashboard" replace /> : children
 }
 
-// Route change & toast telemetry tracker
 function RouteTelemetryTracker() {
   const location = useLocation()
 
@@ -66,6 +67,7 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/about" element={<AboutPage />} />
+        <Route path="/downloads" element={<DownloadsPage />} />
         <Route path="/auth" element={<PublicRoute><AuthPage /></PublicRoute>} />
 
         <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
@@ -92,6 +94,18 @@ function AppRoutes() {
 }
 
 export default function App() {
+  // Pre-warm / ping Render backend on app open so user avoids cold-start latency
+  useEffect(() => {
+    const pingBackend = async () => {
+      try {
+        await fetch(`${API_BASE_URL}/api/health`, { method: 'GET', mode: 'no-cors' })
+      } catch {
+        // Silent catch: pre-warm only
+      }
+    }
+    pingBackend()
+  }, [])
+
   return (
     <ErrorBoundary>
       <AuthProvider>
