@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { toast } from 'sonner'
 import { Link } from 'react-router-dom'
 import { Lightbulb, Code2 } from 'lucide-react'
 import { Github, Linkedin } from '../components/Icons'
@@ -369,18 +370,24 @@ export default function LandingPage() {
             const isStriking = strikingId === id
 
             return (
-              <div
+              <button
                 key={id}
+                type="button"
                 ref={(el) => {
                   badgeDomRefs.current[id] = el
                 }}
+                onClick={() => {
+                  toast(`${cfg.name} Integration`, {
+                    description: `${cfg.targetPercent}% of top tech companies evaluate candidates using ${cfg.name}.`,
+                  })
+                }}
                 aria-label={cfg.name}
-                className={`absolute w-12 h-12 rounded-full bg-slate-900/85 backdrop-blur-md shadow-xl border border-white/10 flex items-center justify-center will-change-transform ${
+                className={`absolute w-12 h-12 rounded-full bg-slate-900/80 backdrop-blur-xl shadow-2xl border border-white/20 flex items-center justify-center pointer-events-auto cursor-pointer will-change-transform transition-transform duration-100 ease-out active:scale-[0.92] ${
                   isPowering ? 'animate-powerup ring-2 ring-white scale-110' : ''
                 } ${isStriking ? 'ring-2 ring-sky-400 drop-shadow-[0_-12px_18px_rgba(56,189,248,0.8)]' : ''}`}
               >
                 <Icon size={22} color={cfg.color} />
-              </div>
+              </button>
             )
           })}
       </div>
