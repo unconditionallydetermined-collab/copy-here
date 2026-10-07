@@ -139,7 +139,7 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
     let dpr = Math.min(window.devicePixelRatio || 1, 2)
 
     const SPACING = Math.max(22, Math.min(28, Math.floor(Math.min(width, height) / 32)))
-    const BASE_DOT_RADIUS = 2.2
+    const BASE_DOT_RADIUS = 1.55
     const BASE_K = 28
     const BASE_C = 6.2
     const MAX_DISP = 28
@@ -267,8 +267,8 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
       ctx.fillStyle = '#0a0a0a'
       ctx.fillRect(0, 0, width, height)
 
-      // Reduced orb glow/light radius by 40% (28 -> 17px)
-      const LIGHT_RADIUS = 17
+      // 30% larger glow radius under orbs (17 -> 22px)
+      const LIGHT_RADIUS = 22
       const LIGHT_RADIUS_SQ = LIGHT_RADIUS * LIGHT_RADIUS
 
       for (let i = 0; i < dots.length; i++) {
@@ -305,7 +305,7 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
 
         // Enlarged luminous fluid particle dots with stronger energy response
         const alpha = Math.min(0.92, 0.42 + 0.50 * energy)
-        const radius = BASE_DOT_RADIUS + 1.25 * energy
+        const radius = BASE_DOT_RADIUS + 0.85 * energy
 
         ctx.fillStyle =
           energy > 0.06

@@ -796,7 +796,7 @@ export default function LandingPage() {
                   top: '50%',
                   marginLeft: '-27px',
                   marginTop: '-27px',
-                  boxShadow: `0 0 14px ${cfg.color}77, 0 0 30px ${cfg.color}33, 0 8px 20px rgba(0,0,0,0.5)`,
+                  boxShadow: `0 0 18px ${cfg.color}88, 0 0 39px ${cfg.color}44, 0 10px 22px rgba(0,0,0,0.55)`,
                 }}
                 className="absolute w-[54px] h-[54px] rounded-full bg-slate-900/85 backdrop-blur-xl shadow-2xl border border-white/25 flex items-center justify-center pointer-events-auto cursor-pointer will-change-transform active:scale-[0.92]"
               >
@@ -829,7 +829,7 @@ export default function LandingPage() {
             <div
               style={{
                 opacity: exitingOpacity,
-                boxShadow: `0 0 20px ${exitingConfig.color}88, 0 0 45px ${exitingConfig.color}44, 0 10px 25px rgba(0,0,0,0.5)`,
+                boxShadow: `0 0 26px ${exitingConfig.color}99, 0 0 58px ${exitingConfig.color}55, 0 12px 28px rgba(0,0,0,0.55)`,
               }}
               className="absolute w-[66px] h-[66px] rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/25 flex items-center justify-center pointer-events-none"
             >
@@ -841,7 +841,7 @@ export default function LandingPage() {
           {activeConfig ? (
             <div
               style={{
-                boxShadow: `0 0 20px ${activeConfig.color}88, 0 0 45px ${activeConfig.color}44, 0 10px 25px rgba(0,0,0,0.5)`,
+                boxShadow: `0 0 26px ${activeConfig.color}99, 0 0 58px ${activeConfig.color}55, 0 12px 28px rgba(0,0,0,0.55)`,
               }}
               className="w-[66px] h-[66px] rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/25 flex items-center justify-center"
             >
