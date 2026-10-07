@@ -53,6 +53,20 @@ export default function LandingPage() {
   const [displayCount, setDisplayCount] = useState(PLATFORM_CONFIG.github.targetPercent)
   const [reducedMotion, setReducedMotion] = useState(false)
   const [badgeRadius, setBadgeRadius] = useState(240)
+  const [showLogs, setShowLogs] = useState(false)
+  const [logCount, setLogCount] = useState(0)
+  const [liveCoords, setLiveCoords] = useState({})
+  const logsRef = useRef([])
+  const pageStartTimeRef = useRef(performance.now())
+
+  const addLog = (type, details) => {
+    const elapsed = Math.round(performance.now() - pageStartTimeRef.current)
+    const entry = `[+${elapsed}ms] [${type}] ${typeof details === 'object' ? JSON.stringify(details) : details}`
+    logsRef.current.push(entry)
+    // Keep last 1500 log entries
+    if (logsRef.current.length > 1500) logsRef.current.shift()
+    setLogCount(logsRef.current.length)
+  }
 
   const rippleRef = useRef(null)
   const centerSlotRef = useRef(null)
@@ -96,6 +110,7 @@ export default function LandingPage() {
       const vh = window.innerHeight
       const r = Math.max(200, Math.min(vw * 0.44, vh * 0.40, 280))
       setBadgeRadius(r)
+      addLog('VIEWPORT_INIT', { vw, vh, badgeRadius: r })
     }
     calcRadius()
     window.addEventListener('resize', calcRadius)
@@ -113,6 +128,22 @@ export default function LandingPage() {
       lastTime = now
 
       if (document.visibilityState === 'visible') {
+        const nowMs = Math.round(now)
+        if (!window.__lastCoordLog || nowMs - window.__lastCoordLog > 800) {
+          window.__lastCoordLog = nowMs
+          const sample = {}
+          BADGES.forEach(id => {
+            const rad = (((anglesRef.current[id] || 0) - 90) * Math.PI) / 180
+            sample[id] = {
+              deg: Math.round(anglesRef.current[id] || 0),
+              x: Math.round(Math.cos(rad) * badgeRadius),
+              y: Math.round(Math.sin(rad) * badgeRadius),
+              orbiting: orbitingRef.current[id]
+            }
+          })
+          addLog('COORDS_TICK', { active: activeStageIdRef.current, candidate: incomingCandidateRef.current, sample })
+          setLiveCoords(sample)
+        }
         const angles = anglesRef.current
         const activeOrbiters = BADGES.filter((id) => orbitingRef.current[id])
         const candidate = incomingCandidateRef.current
@@ -131,6 +162,7 @@ export default function LandingPage() {
               if ((prevDeg > 350 && nextDeg < 15) || (nextDeg >= 356 || nextDeg <= 4)) {
                 angles[id] = 0 // Top apex: x=0, y=-badgeRadius
                 pausedAtApexRef.current = id
+                addLog('APEX_ARRIVAL', { id, prevDeg: Math.round(prevDeg), nextDeg: Math.round(nextDeg), x: 0, y: -badgeRadius })
                 setPoweringId(id)
               }
             }
@@ -236,8 +268,11 @@ export default function LandingPage() {
     // 1. As powerup loads, dim glow under other orbs so focus snaps to apex
     glowDimRef.current = 0.15
 
+    addLog('POWERUP_START', { id: poweringId, y: -badgeRadius })
+
     // 2. While asteroid is about to strike, get rid of text below with S-curve exit
     const textExitTimer = setTimeout(() => {
+      addLog('TEXT_EXIT_START', { phase: 'exiting' })
       setTextPhase('exiting')
     }, 400)
 
@@ -254,6 +289,7 @@ export default function LandingPage() {
         startY: -badgeRadius,
         startTime: performance.now(),
       }
+      addLog('STRIKE_LAUNCH', { id: launchingId, startX: 0, startY: -badgeRadius })
 
       // 4. Exact moment of impact (360ms plunge)
       setTimeout(() => {
@@ -285,6 +321,7 @@ export default function LandingPage() {
             intensity: 320,
             blastRadius: 120,
           })
+          addLog('SLAM_IMPACT', { id: launchingId, cx: Math.round(cx), cy: Math.round(cy), intensity: 320 })
         }
 
         // Keep text hidden while ripples settle; fade in once dust settles (700ms later)
@@ -315,6 +352,7 @@ export default function LandingPage() {
               const btnX = btnRect.left + btnRect.width / 2
               const btnY = btnRect.top + btnRect.height / 2
               rippleRef.current.streamGlowToTarget(btnX, btnY)
+              addLog('CTA_GLOW_STREAM', { btnX: Math.round(btnX), btnY: Math.round(btnY) })
             }
 
             // 3 seconds after glow returns, button does AI thinking text simmer
@@ -460,6 +498,60 @@ export default function LandingPage() {
           )}
           <span className={`relative z-10 ${buttonThinking ? "ai-thinking-text font-bold" : ""}`}>Get a job</span>
         </Link>
+      </div>
+          {/* Diagnostic Coordinates & Event Log HUD */}
+      <div className="fixed bottom-4 left-4 z-50 flex flex-col items-start gap-2 pointer-events-auto select-text font-mono text-[11px]">
+        <div className="bg-slate-950/90 backdrop-blur-xl border border-white/15 rounded-xl p-3 shadow-2xl text-slate-300 max-w-xs sm:max-w-md w-full">
+          <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-2 mb-2">
+            <span className="font-semibold text-white flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              Live Telemetry & Coordinates ({logCount})
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  const content = logsRef.current.join('\n')
+                  navigator.clipboard.writeText(content).then(() => {
+                    toast.success('Telemetry logs copied to clipboard!', {
+                      description: `${logsRef.current.length} lines copied from start to now.`
+                    })
+                  }).catch(() => {
+                    toast.error('Failed to copy to clipboard')
+                  })
+                }}
+                className="px-2.5 py-1 rounded-md bg-white text-slate-950 font-bold hover:bg-slate-200 active:scale-95 transition cursor-pointer"
+              >
+                Copy All Logs
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowLogs(!showLogs)}
+                className="px-2 py-1 rounded-md bg-slate-800 text-slate-300 hover:bg-slate-700 active:scale-95 transition cursor-pointer"
+              >
+                {showLogs ? 'Hide' : 'View'}
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-1 text-[10px] text-slate-400">
+            <div>Active: <span className="text-white font-bold">{activeStageId}</span></div>
+            <div>Phase: <span className="text-amber-300">{strikingId ? `striking (${strikingId})` : poweringId ? `powering (${poweringId})` : textPhase}</span></div>
+            {Object.entries(liveCoords).map(([id, data]) => (
+              <div key={id} className="truncate">
+                {id}: ({data.x}, {data.y}) {data.deg}°
+              </div>
+            ))}
+          </div>
+
+          {showLogs && (
+            <div className="mt-2 pt-2 border-t border-white/10 max-h-48 overflow-y-auto space-y-0.5 text-[9px] text-slate-400 bg-black/40 p-2 rounded">
+              {logsRef.current.slice(-30).map((l, i) => (
+                <div key={i} className="truncate">{l}</div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </main>
   )
