@@ -346,6 +346,22 @@ export default function LandingPage() {
           state.sharedPhase = (state.sharedPhase + state.currentSpeed * dt) % (2 * Math.PI)
           state.targetSpeed = baseSpeedRad
 
+          // Guard: if there is no orb in the center or on the page, don't replace; wait for it to appear again
+          const centerEl = centerSlotRef.current
+          const currentActive = state.currentActiveId
+          const activeCfg = currentActive ? PLATFORM_CONFIG[currentActive] : null
+
+          if (!currentActive || !activeCfg || !centerEl) {
+            break
+          }
+
+          const missingFloatingOrb = BADGES.some(
+            (id) => id !== currentActive && !badgeDomRefs.current[id]
+          )
+          if (missingFloatingOrb) {
+            break
+          }
+
           if (timeInPhase >= MIN_HOLD_TIME) {
             // Find which badge is assigned to the current incoming slot
             const incomingSlot = state.incomingSlotIndex
@@ -465,11 +481,22 @@ export default function LandingPage() {
 
           if (p >= 1) {
             if (cometTailRef.current) cometTailRef.current.style.opacity = '0'
+
+            const centerEl = centerSlotRef.current
+            const prevActive = state.currentActiveId
+            const incomingEl = incoming ? badgeDomRefs.current[incoming] : null
+
+            // Guard: if there is no orb in the center or on the page, don't replace; wait for orb to appear
+            if (!prevActive || !incoming || !centerEl || !incomingEl) {
+              state.phase = 'HOLD'
+              state.phaseStartTime = now
+              break
+            }
+
             state.phase = 'IMPACT'
             state.phaseStartTime = now
 
             // IMPACT AND REPLACEMENT
-            const prevActive = state.currentActiveId
             const incomingSlot = state.slotAssignments[incoming] ?? state.incomingSlotIndex
 
             // Swap active center platform and assign vacated slot to outgoing platform
@@ -866,7 +893,7 @@ export default function LandingPage() {
         <Link
           ref={buttonRef}
           to="/auth"
-          className="relative overflow-hidden mt-5 inline-flex items-center justify-center min-w-[170px] min-h-[48px] px-8 py-3 rounded-xl bg-white text-slate-950 font-semibold text-base shadow-[0_0_0_1px_rgba(255,255,255,0.35)] active:scale-[0.97] transition-colors duration-200 ease-out hover:bg-slate-100 touch-manipulation select-none"
+          className="relative overflow-hidden mt-5 inline-flex items-center justify-center min-w-[170px] min-h-[48px] px-8 py-3 rounded-xl bg-white text-slate-950 font-semibold text-base shadow-[0_0_0_1px_rgba(255,255,255,0.35)] active:scale-[0.97] transition-colors duration-200 ease-out touch-manipulation select-none [@media(hover:hover)_and_(pointer:fine)]:hover:bg-slate-100"
         >
           <span className="grid grid-cols-1 grid-rows-1 items-center justify-center text-center [&>*]:col-start-1 [&>*]:row-start-1">
             <span

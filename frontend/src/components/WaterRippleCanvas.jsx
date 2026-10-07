@@ -461,7 +461,7 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
   return (
     <canvas
       ref={canvasRef}
-      className={'absolute inset-0 block w-full h-full ' + className}
+      style={{ touchAction: 'none' }} className={'absolute inset-0 block w-full h-full ' + className}
     />
   )
 })
