@@ -67,9 +67,9 @@ export default function LandingPage() {
 
   const anglesRef = useRef({
     github: 0,
-    leetcode: 120,
-    linkedin: 240,
-    skills: 0,
+    leetcode: 90,
+    linkedin: 180,
+    skills: 270,
   })
 
   const orbitingRef = useRef({
@@ -113,21 +113,6 @@ export default function LandingPage() {
       lastTime = now
 
       if (document.visibilityState === 'visible') {
-        const nowMs = Math.round(now)
-        if (!window.__lastCoordLog || nowMs - window.__lastCoordLog > 800) {
-          window.__lastCoordLog = nowMs
-          const sample = {}
-          BADGES.forEach(id => {
-            const rad = (((anglesRef.current[id] || 0) - 90) * Math.PI) / 180
-            sample[id] = {
-              deg: Math.round(anglesRef.current[id] || 0),
-              x: Math.round(Math.cos(rad) * badgeRadius),
-              y: Math.round(Math.sin(rad) * badgeRadius),
-              orbiting: orbitingRef.current[id]
-            }
-          })
-          setLiveCoords(sample)
-        }
         const angles = anglesRef.current
         const activeOrbiters = BADGES.filter((id) => orbitingRef.current[id])
         const candidate = incomingCandidateRef.current
@@ -140,16 +125,14 @@ export default function LandingPage() {
             const prevDeg = angles[id]
             let speed = baseSpeed
 
-            // Natural deceleration when approaching apex
             if (candidate === id && !pausedAtApexRef.current && !strikeProgressRef.current) {
               const distToApex = (360 - prevDeg) % 360
-              if (distToApex <= 75 && distToApex > 0) {
-                // Easing down to zero velocity as it comes to rest
+              if (distToApex <= 75 && distToApex > 1.5) {
                 const progress = distToApex / 75
-                speed = baseSpeed * Math.max(0.06, Math.pow(progress, 1.25))
+                speed = baseSpeed * Math.max(0.12, Math.pow(progress, 1.1))
               }
 
-              if (distToApex <= 1.2 || (prevDeg > 358 && prevDeg < 360) || nextDeg < 1.0) {
+              if (prevDeg > 357 || (prevDeg > 270 && prevDeg + speed * delta >= 360)) {
                 angles[id] = 0
                 pausedAtApexRef.current = id
                 setPoweringId(id)
