@@ -141,7 +141,7 @@ export default function LandingPage() {
   const [ctaShimmerActive, setCtaShimmerActive] = useState(false)
   const [ctaShimmerCycle, setCtaShimmerCycle] = useState(0)
   const [pulseRingActive, setPulseRingActive] = useState(false)
-  const [centerIsCta, setCenterIsCta] = useState(false)
+  const [ctaAttention, setCtaAttention] = useState(false)
   const [centerCoords, setCenterCoords] = useState({ x: 0, y: 0 })
 
   const heroWrapperRef = useRef(null)
@@ -310,9 +310,19 @@ export default function LandingPage() {
       bottom: slotCenterY + slotRadius + pad,
     }
 
+    let buttonCenterX = slotCenterX
+    let buttonCenterY = slotCenterY + 140
+    if (buttonRef.current) {
+      const br = buttonRef.current.getBoundingClientRect()
+      buttonCenterX = br.left + br.width / 2
+      buttonCenterY = br.top + br.height / 2
+    }
+
     geomRef.current = {
       slotCenterX,
       slotCenterY,
+      buttonCenterX,
+      buttonCenterY,
       exclusionRect,
       radius: R,
       iconRadius,
@@ -587,13 +597,16 @@ export default function LandingPage() {
             state.phase = 'WAVE_REV'
             state.phaseStartTime = now
 
-            // Trigger inward reverse wave
+            const targetX = geom.buttonCenterX ?? geom.slotCenterX
+            const targetY = geom.buttonCenterY ?? (geom.slotCenterY + 140)
+
+            // Trigger inward reverse wave returning directly to the existing CTA button
             if (rippleRef.current?.triggerReverseWave) {
-              rippleRef.current.triggerReverseWave(geom.slotCenterX, geom.slotCenterY, {
-                intensity: 130,
-                speed: 340,
-                width: 65,
-                startRadius: 420,
+              rippleRef.current.triggerReverseWave(targetX, targetY, {
+                intensity: 140,
+                speed: 350,
+                width: 70,
+                startRadius: 440,
               })
             }
           }
@@ -608,9 +621,9 @@ export default function LandingPage() {
           // Synced return: returning badge fades smoothly 0 -> 0.85 synchronized with reverse wave
           state.returningOpacity = 0.85 * (1 - Math.cos(revP * Math.PI)) / 2
 
-          // When reverse wave reaches center, center morphs into CTA button
-          if (revP >= 0.85 && !centerIsCta) {
-            setCenterIsCta(true)
+          // Reverse wave converges directly toward the existing CTA button
+          if (revP >= 0.75 && !ctaAttention) {
+            setCtaAttention(true)
           }
 
           if (revP >= 1) {
@@ -678,7 +691,7 @@ export default function LandingPage() {
           state.sharedPhase = (state.sharedPhase + state.currentSpeed * dt) % (2 * Math.PI)
 
           if (wakeP >= 1) {
-            setCenterIsCta(false)
+            setCtaAttention(false)
             state.phase = 'HOLD'
             state.phaseStartTime = now
             setTextPhase('idle')
@@ -912,7 +925,7 @@ export default function LandingPage() {
           )}
 
           {/* Outgoing center icon fading in-place */}
-          {exitingConfig && !centerIsCta && (
+          {exitingConfig && (
             <div
               style={{
                 opacity: exitingOpacity,
@@ -924,18 +937,8 @@ export default function LandingPage() {
             </div>
           )}
 
-          {/* Center morphs into CTA button when reverse wave shrinks down */}
-          {centerIsCta ? (
-            <Link
-              to="/auth"
-              className="relative overflow-hidden inline-flex items-center justify-center min-w-[210px] min-h-[52px] px-8 py-3.5 rounded-2xl bg-white text-slate-950 font-bold text-base shadow-[0_0_35px_rgba(255,255,255,0.45)] active:scale-[0.97] transition-all duration-300 ease-out touch-manipulation select-none"
-            >
-              <span className="flex items-center gap-2">
-                {activeConfig && React.createElement(activeConfig.icon, { size: 22, color: '#0f172a' })}
-                <span className="text-slate-950 font-semibold tracking-normal">Get a job you'll love</span>
-              </span>
-            </Link>
-          ) : activeConfig ? (
+          {/* Active Center Icon (1.3x larger = 86px) */}
+          {activeConfig ? (
             <div
               style={{
                 boxShadow: `0 0 32px ${activeConfig.color}99, 0 0 68px ${activeConfig.color}55, 0 14px 32px rgba(0,0,0,0.55)`,
@@ -984,11 +987,15 @@ export default function LandingPage() {
           )}
         </div>
 
-        {/* 3. White button "Get a job you'll love" with CTA text shimmer */}
+        {/* 3. White button "Get a job you'll love" with CTA text shimmer and attention highlight */}
         <Link
           ref={buttonRef}
           to="/auth"
-          className="relative overflow-hidden mt-5 inline-flex items-center justify-center min-w-[170px] min-h-[48px] px-8 py-3 rounded-xl bg-white text-slate-950 font-semibold text-base shadow-[0_0_0_1px_rgba(255,255,255,0.35)] active:scale-[0.97] transition-colors duration-200 ease-out touch-manipulation select-none [@media(hover:hover)_and_(pointer:fine)]:hover:bg-slate-100"
+          className={`relative overflow-hidden mt-5 inline-flex items-center justify-center min-w-[170px] min-h-[48px] px-8 py-3 rounded-xl bg-white text-slate-950 font-semibold text-base shadow-[0_0_0_1px_rgba(255,255,255,0.35)] active:scale-[0.97] transition-all duration-300 ease-out touch-manipulation select-none [@media(hover:hover)_and_(pointer:fine)]:hover:bg-slate-100 ${
+            ctaAttention
+              ? 'ring-2 ring-white shadow-[0_0_40px_rgba(255,255,255,0.85),0_0_80px_rgba(255,255,255,0.4)] scale-[1.03]'
+              : ''
+          }`}
         >
           <span className="grid grid-cols-1 grid-rows-1 items-center justify-center text-center [&>*]:col-start-1 [&>*]:row-start-1">
             <span
