@@ -26,7 +26,6 @@ import GoalsPage     from './pages/GoalsPage'
 import AIAssistant   from './pages/AIAssistant'
 import PortfolioPage from './pages/PortfolioPage'
 import DebugPage     from './pages/DebugPage'
-import SplashTransition from './components/SplashTransition'
 
 
 function ProtectedRoute({ children }) {
@@ -96,7 +95,6 @@ function AppRoutes() {
     <>
       <RouteTelemetryTracker />
       <SessionOnboardingSync />
-      <SplashTransition key={`${location.pathname}${location.search}`} />
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/about" element={<AboutPage />} />

@@ -6,7 +6,6 @@ import { toast } from 'sonner'
 import { getOnboardingState } from '../services/onboardingStorage'
 import { hydrateProfileFromOnboarding } from '../services/api'
 import WaterRippleCanvas from '../components/WaterRippleCanvas'
-import SplashTransition from '../components/SplashTransition'
 
 export default function AuthPage() {
   const [searchParams] = useSearchParams()
@@ -90,7 +89,6 @@ export default function AuthPage() {
 
   return (
     <div className="relative isolate min-h-[100dvh] bg-[#0a0a0a] text-white flex items-center justify-center p-6 selection:bg-slate-100 font-sans overflow-hidden">
-      <SplashTransition key={isSignup ? 'signup' : 'signin'} />
       <div aria-hidden="true" className="fixed inset-0 z-0 pointer-events-none"><WaterRippleCanvas className="pointer-events-none" /></div>
       <div className="relative z-10 w-full max-w-[420px]">
         {/* Header Badge */}

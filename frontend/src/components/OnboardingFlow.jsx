@@ -27,7 +27,6 @@ import {
   setOnboardingActive,
 } from '../services/api'
 import WaterRippleCanvas from './WaterRippleCanvas'
-import SplashTransition from './SplashTransition'
 
 const DEBUG_SLOWMO = 1
 
@@ -437,7 +436,6 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
 
   return (
     <div data-onboarding-root className="fixed inset-0 z-50 bg-[#0a0a0a] text-white flex flex-col items-center justify-between overflow-x-hidden overflow-y-auto overscroll-contain select-none font-sans min-h-[100dvh] relative isolate">
-      <SplashTransition />
       <div aria-hidden="true" className="fixed inset-0 z-0 pointer-events-none"><WaterRippleCanvas className="pointer-events-none" /></div>
       <div className="relative z-10 w-full flex flex-col items-center justify-between min-h-[100dvh]">
       {/* 1. TOP PROGRESS BAR */}
