@@ -17,6 +17,9 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
     triggerSlam: (clientX, clientY, options = {}) => {
       triggerSlamInternal(clientX, clientY, options)
     },
+    displaceAt: (clientX, clientY, force = 90) => {
+      displaceAtCoord(clientX, clientY, force)
+    },
     streamGlowToTarget: (targetX, targetY) => {
       startGlowStream(targetX, targetY)
     },
@@ -25,6 +28,28 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
       glowDimRef.current = dim
     },
   }))
+
+  const displaceAtCoord = (clientX, clientY, force = 90) => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const rect = canvas.getBoundingClientRect()
+    const x = clientX - rect.left
+    const y = clientY - rect.top
+    const blastRadius = 80
+    const dots = dotsRef.current
+    for (let i = 0; i < dots.length; i++) {
+      const dot = dots[i]
+      const dx = dot.x - x
+      const dy = dot.y - y
+      const distSq = dx * dx + dy * dy
+      if (distSq < blastRadius * blastRadius && distSq > 0.01) {
+        const dist = Math.sqrt(distSq)
+        const factor = (1 - dist / blastRadius) * force
+        dot.vx += (dx / dist) * factor
+        dot.vy += (dy / dist) * factor
+      }
+    }
+  }
 
   const triggerSlamInternal = (clientX, clientY, options = {}) => {
     const canvas = canvasRef.current
@@ -221,11 +246,21 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
         const fx = -K * dispX - C * dot.vx
         const fy = -K * dispY - C * dot.vy
 
-        dot.vx += fx * dt
-        dot.vy += fy * dt
+        dot.vx = Math.max(-400, Math.min(400, dot.vx + fx * dt))
+        dot.vy = Math.max(-400, Math.min(400, dot.vy + fy * dt))
 
         dot.x += dot.vx * dt
         dot.y += dot.vy * dt
+
+        // Keep displacement bounded
+        const curDispX = dot.x - dot.ox
+        const curDispY = dot.y - dot.oy
+        if (curDispX * curDispX + curDispY * curDispY > 16000) {
+          dot.x = dot.ox + Math.sign(curDispX) * 120
+          dot.y = dot.oy + Math.sign(curDispY) * 120
+          dot.vx *= 0.5
+          dot.vy *= 0.5
+        }
       }
 
       // 3. Clear canvas
@@ -311,12 +346,20 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
           }
         }
 
-        const alpha = Math.min(1, 0.35 + 0.65 * energy)
-        const radius = BASE_DOT_RADIUS + 2.2 * Math.min(1, energy)
+        // Guarantee dot is valid and bounded
+        if (isNaN(dot.x) || isNaN(dot.y)) {
+          dot.x = dot.ox
+          dot.y = dot.oy
+          dot.vx = 0
+          dot.vy = 0
+        }
 
-        ctx.fillStyle = energy > 0.1
-          ? `rgba(${Math.round(210 + 45 * energy)}, ${Math.round(230 + 25 * energy)}, 255, ${alpha.toFixed(3)})`
-          : 'rgba(180, 185, 195, 0.35)'
+        const alpha = Math.min(1, Math.max(0.35, 0.35 + 0.65 * energy))
+        const radius = BASE_DOT_RADIUS + 2.0 * Math.min(1, energy)
+
+        ctx.fillStyle = energy > 0.08
+          ? `rgba(${Math.round(190 + 65 * energy)}, ${Math.round(220 + 35 * energy)}, 255, ${alpha.toFixed(3)})`
+          : "rgba(160, 175, 195, 0.40)"
 
         ctx.beginPath()
         ctx.arc(dot.x, dot.y, radius, 0, Math.PI * 2)

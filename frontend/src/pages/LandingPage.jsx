@@ -60,7 +60,8 @@ export default function LandingPage() {
 
   const activeStageIdRef = useRef('github')
   const incomingCandidateRef = useRef('leetcode')
-  const pausedAtApexRef = useRef(null)
+  const pausedOrbitAngleRef = useRef(null)
+  const pausedOrbRef = useRef(null)
   const glowDimRef = useRef(1.0)
   const strikeProgressRef = useRef(null) // null or { id, startY, currentY, startTime }
 
@@ -116,20 +117,16 @@ export default function LandingPage() {
         const activeOrbiters = BADGES.filter((id) => orbitingRef.current[id])
         const candidate = incomingCandidateRef.current
 
-        // Check if candidate naturally reached apex (0 deg) in circular motion
-        if (candidate && orbitingRef.current[candidate] && !pausedAtApexRef.current && !strikeProgressRef.current) {
-          const currentDeg = angles[candidate] % 360
-          if (currentDeg >= 354 || currentDeg <= 6) {
-            angles[candidate] = 0
-            pausedAtApexRef.current = candidate
-            setPoweringId(candidate)
-          }
+        // Stop candidate right where it currently is in orbit and trigger powerup
+        if (candidate && orbitingRef.current[candidate] && !pausedOrbRef.current && !strikeProgressRef.current) {
+          pausedOrbRef.current = candidate
+          pausedOrbitAngleRef.current = angles[candidate]
+          setPoweringId(candidate)
         }
 
         // Advance orbiting icons with spring elasticity to prevent overlapping
         activeOrbiters.forEach((id) => {
-          if (pausedAtApexRef.current === id) {
-            angles[id] = 0
+          if (pausedOrbRef.current === id) {
             return
           }
 
@@ -163,15 +160,21 @@ export default function LandingPage() {
           if (strikeProgressRef.current && strikeProgressRef.current.id === id) {
             const sp = strikeProgressRef.current
             const elapsed = now - sp.startTime
-            const duration = 360 // 360ms plunge
+            const duration = 380
             const p = Math.min(1, elapsed / duration)
-            // Heavy acceleration plunge curve
-            const easeP = p * p * p
-            const curY = -badgeRadius + easeP * badgeRadius
+            const easeP = p * p * p // Heavy acceleration
+
+            const curX = sp.startX * (1 - easeP)
+            const curY = sp.startY * (1 - easeP)
 
             if (el) {
-              el.style.transform = `translate3d(0px, ${curY}px, 0)`
-              el.style.opacity = '1'
+              el.style.transform = `translate3d(${curX}px, ${curY}px, 0)`
+              el.style.opacity = "1"
+            }
+
+            // Displace water particles dynamically along the asteroid flight path
+            if (rippleRef.current && p < 0.95) {
+              rippleRef.current.displaceAt(centerX + curX, centerY + curY, 110)
             }
             return
           }
