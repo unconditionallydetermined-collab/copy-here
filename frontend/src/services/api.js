@@ -88,7 +88,7 @@ let currentBackoff = 2000
 
 const doPing = async () => {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 10000)
+  const timer = setTimeout(() => controller.abort(), 45000)
   try {
     const response = await fetch(HEALTH_URL, {
       method: 'GET',
@@ -172,7 +172,7 @@ const performOnboardingHydration = async (onProgress) => {
   if (!state) return { success: true }
 
   try {
-    const backendReady = await waitForBackendReady(60000)
+    const backendReady = await waitForBackendReady(180000)
     if (!backendReady) {
       return { success: false, error: 'The server is still starting. Your onboarding details are saved on this device; please try again shortly.' }
     }

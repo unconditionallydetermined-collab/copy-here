@@ -4,6 +4,7 @@ import { resumeApi, aiApi, skillsApi } from '../services/api'
 import logger from '../services/logger'
 import { Upload, FileText, CheckCircle2, Loader2, Zap, Brain, RefreshCw, ExternalLink, PlusCircle } from 'lucide-react'
 import { toast } from 'sonner'
+import { getOnboardingState } from '../services/onboardingStorage'
 
 function MarkdownText({ text }) {
   if (!text) return null
@@ -32,6 +33,7 @@ function MarkdownText({ text }) {
 
 export default function ResumePage() {
   const [resume, setResume] = useState(null)
+  const [pendingOnboardingResume, setPendingOnboardingResume] = useState(null)
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
@@ -46,7 +48,9 @@ export default function ResumePage() {
         logger.info('ResumePage', 'Loaded existing resume', { fileName: r.data?.fileName, skillsCount: r.data?.extractedSkills?.length })
       })
       .catch((err) => {
-        logger.debug('ResumePage', 'No existing resume or fetch error', { message: err.message })
+        const pending = getOnboardingState()?.resume || null
+        setPendingOnboardingResume(pending)
+        logger.debug('ResumePage', 'No server resume found; checking saved onboarding resume', { message: err.message, hasLocalResume: !!pending })
       })
       .finally(() => setLoading(false))
   }, [])
@@ -79,6 +83,7 @@ export default function ResumePage() {
       const { data } = await resumeApi.upload(formData)
       const durationMs = Date.now() - startTime
       setResume(data)
+      setPendingOnboardingResume(null)
       setAnalysis(null)
       logger.info('ResumeUpload', `Upload and extraction completed in ${durationMs}ms`, {
         fileName: data.fileName,
@@ -194,7 +199,7 @@ export default function ResumePage() {
         {/* Upload zone */}
         <div className="card p-6">
           <h3 className="text-sm font-semibold text-slate-800 mb-4 flex items-center gap-2">
-            <Upload size={15} className="text-blue-600" /> Upload Resume
+            <Upload size={15} className="text-blue-600" /> {resume ? 'Replace Resume' : 'Your Resume'}
           </h3>
 
           <div
@@ -216,7 +221,7 @@ export default function ResumePage() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-slate-700">
-                    {isDragActive ? 'Drop your resume here' : 'Drag & drop or click to upload'}
+                    {isDragActive ? 'Drop your resume here' : resume ? 'Upload a new resume to replace the saved one' : 'Drag & drop or click to upload'}
                   </p>
                   <p className="text-xs text-slate-400 mt-1">PDF, DOCX, TXT up to 10MB</p>
                 </div>
@@ -224,6 +229,13 @@ export default function ResumePage() {
             )}
           </div>
         </div>
+
+        {pendingOnboardingResume && !resume && (
+          <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <p className="font-semibold">{pendingOnboardingResume.fileName} is saved from onboarding</p>
+            <p className="mt-1 text-amber-800">It’s waiting to sync with your account. Keep this browser open while the server reconnects; your local copy hasn’t been discarded.</p>
+          </div>
+        )}
 
         {/* Resume info */}
         {resume && (

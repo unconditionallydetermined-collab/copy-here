@@ -5,7 +5,8 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import AppLayout from './components/AppLayout'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import logger from './services/logger'
-import { initKeepAlive } from './services/api'
+import { getBackendStatus, hydrateProfileFromOnboarding, initKeepAlive, subscribeBackendStatus } from './services/api'
+import { getOnboardingState } from './services/onboardingStorage'
 
 import LandingPage   from './pages/LandingPage'
 import AboutPage     from './pages/AboutPage'
@@ -60,10 +61,39 @@ function RouteTelemetryTracker() {
   return null
 }
 
+function SessionOnboardingSync() {
+  const { user } = useAuth()
+  const [backendStatus, setBackendStatus] = useState(getBackendStatus())
+
+  useEffect(() => subscribeBackendStatus(setBackendStatus), [])
+
+  useEffect(() => {
+    if (!user || backendStatus !== 'ready' || !getOnboardingState()) return
+    let cancelled = false
+    let retryTimer
+
+    const syncSavedOnboarding = async () => {
+      const result = await hydrateProfileFromOnboarding()
+      if (!result.success && !cancelled) {
+        retryTimer = setTimeout(syncSavedOnboarding, 20000)
+      }
+    }
+
+    syncSavedOnboarding()
+    return () => {
+      cancelled = true
+      clearTimeout(retryTimer)
+    }
+  }, [user?.id, backendStatus])
+
+  return null
+}
+
 function AppRoutes() {
   return (
     <>
       <RouteTelemetryTracker />
+      <SessionOnboardingSync />
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/about" element={<AboutPage />} />
