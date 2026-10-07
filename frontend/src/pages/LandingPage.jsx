@@ -413,7 +413,7 @@ export default function LandingPage() {
                   })
                 }}
                 aria-label={cfg.name}
-                className={`absolute w-12 h-12 rounded-full bg-slate-900/80 backdrop-blur-xl shadow-2xl border border-white/20 flex items-center justify-center pointer-events-auto cursor-pointer will-change-transform transition-transform duration-100 ease-out active:scale-[0.92] ${
+                style={{ left: "50%", top: "50%", marginLeft: "-24px", marginTop: "-24px" }} className={`absolute w-12 h-12 rounded-full bg-slate-900/80 backdrop-blur-xl shadow-2xl border border-white/20 flex items-center justify-center pointer-events-auto cursor-pointer will-change-transform transition-transform duration-100 ease-out active:scale-[0.92] ${
                   isPowering ? 'animate-powerup ring-2 ring-white scale-110' : ''
                 } ${isStriking ? 'ring-2 ring-sky-400 drop-shadow-[0_-12px_18px_rgba(56,189,248,0.8)]' : ''}`}
               >
@@ -492,60 +492,6 @@ export default function LandingPage() {
           <span className={`relative z-10 ${buttonThinking ? "ai-thinking-text font-bold" : ""}`}>Get a job</span>
         </Link>
       </div>
-          {/* Diagnostic Coordinates & Event Log HUD */}
-      <div className="fixed bottom-4 left-4 z-50 flex flex-col items-start gap-2 pointer-events-auto select-text font-mono text-[11px]">
-        <div className="bg-slate-950/90 backdrop-blur-xl border border-white/15 rounded-xl p-3 shadow-2xl text-slate-300 max-w-xs sm:max-w-md w-full">
-          <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-2 mb-2">
-            <span className="font-semibold text-white flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              Live Telemetry & Coordinates ({logCount})
-            </span>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => {
-                  const content = logsRef.current.join('\n')
-                  navigator.clipboard.writeText(content).then(() => {
-                    toast.success('Telemetry logs copied to clipboard!', {
-                      description: `${logsRef.current.length} lines copied from start to now.`
-                    })
-                  }).catch(() => {
-                    toast.error('Failed to copy to clipboard')
-                  })
-                }}
-                className="px-2.5 py-1 rounded-md bg-white text-slate-950 font-bold hover:bg-slate-200 active:scale-95 transition cursor-pointer"
-              >
-                Copy All Logs
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowLogs(!showLogs)}
-                className="px-2 py-1 rounded-md bg-slate-800 text-slate-300 hover:bg-slate-700 active:scale-95 transition cursor-pointer"
-              >
-                {showLogs ? 'Hide' : 'View'}
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-1 text-[10px] text-slate-400">
-            <div>Active: <span className="text-white font-bold">{activeStageId}</span></div>
-            <div>Phase: <span className="text-amber-300">{strikingId ? `striking (${strikingId})` : poweringId ? `powering (${poweringId})` : textPhase}</span></div>
-            {Object.entries(liveCoords).map(([id, data]) => (
-              <div key={id} className="truncate">
-                {id}: ({data.x}, {data.y}) {data.deg}°
-              </div>
-            ))}
-          </div>
-
-          {showLogs && (
-            <div className="mt-2 pt-2 border-t border-white/10 max-h-48 overflow-y-auto space-y-0.5 text-[9px] text-slate-400 bg-black/40 p-2 rounded">
-              {logsRef.current.slice(-30).map((l, i) => (
-                <div key={i} className="truncate">{l}</div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </main>
+          </main>
   )
 }

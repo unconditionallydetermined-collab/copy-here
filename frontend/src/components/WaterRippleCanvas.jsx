@@ -100,8 +100,8 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
         const dist = Math.sqrt(distSq)
         const falloff = 1 - dist / blastRadius
         const blastForce = falloff * 320
-        dot.vx += (dx / dist) * blastForce
-        dot.vy += (dy / dist) * blastForce
+        dot.vx += (dx / dist) * Math.min(blastForce, 35)
+        dot.vy += (dy / dist) * Math.min(blastForce, 35)
       }
     }
 
@@ -227,8 +227,8 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
             const distanceAttenuation = 1 / (1 + dist * 0.002)
             const impulse = w.intensity * radialFalloff * distanceAttenuation
 
-            dot.vx += (dx / dist) * impulse * dt * 30
-            dot.vy += (dy / dist) * impulse * dt * 30
+            dot.vx += (dx / dist) * Math.min(impulse * dt * 8, 25)
+            dot.vy += (dy / dist) * Math.min(impulse * dt * 8, 25)
           }
         }
 
