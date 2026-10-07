@@ -26,6 +26,7 @@ import {
   subscribeBackendStatus,
   setOnboardingActive,
 } from '../services/api'
+import WaterRippleCanvas from './WaterRippleCanvas'
 
 const DEBUG_SLOWMO = 1
 
@@ -36,7 +37,6 @@ const STEP_CONFIG = {
     label: 'GitHub',
     icon: GithubLogo,
     color: '#000000',
-    dotColor: '#24292e',
     hireStat: 80,
     hireText: 'Over 80% of open-source lives on GitHub',
   },
@@ -46,7 +46,6 @@ const STEP_CONFIG = {
     label: 'LinkedIn',
     icon: LinkedinLogo,
     color: '#0A66C2',
-    dotColor: '#0A66C2',
     hireStat: 90,
     hireText: 'Over 90% of recruiters use LinkedIn to hire',
   },
@@ -56,7 +55,6 @@ const STEP_CONFIG = {
     label: 'LeetCode',
     icon: Code,
     color: '#FFA116',
-    dotColor: '#FFA116',
     hireStat: 90,
     hireText: '90% of companies check LeetCode',
   },
@@ -66,7 +64,6 @@ const STEP_CONFIG = {
     label: 'Resume',
     icon: Article,
     color: '#10B981',
-    dotColor: '#10B981',
     hireStat: 90,
     hireText: 'Exactly. You control the 90%',
   },
@@ -76,7 +73,6 @@ const STEP_CONFIG = {
     label: 'Skills',
     icon: Wrench,
     color: '#6366F1',
-    dotColor: '#6366F1',
     hireStat: 90,
     hireText: 'Exactly. You control the 90%',
   },
@@ -173,35 +169,8 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
   const [skillSuggestions, setSkillSuggestions] = useState([])
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1)
 
-  const [dotsBursting, setDotsBursting] = useState(false)
-  const [centerRippling, setCenterRippling] = useState(false)
   const [highlightOption, setHighlightOption] = useState(false)
-  const [orbitTarget, setOrbitTarget] = useState({ x: window.innerWidth / 2, y: window.innerHeight / 2, width: 0, height: 0 })
 
-  useEffect(() => {
-    let frame = 0
-    const measure = () => {
-      cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(() => {
-        const target = document.querySelector('.onboarding-orbit-target')
-        if (!target) return
-        const rect = target.getBoundingClientRect()
-        setOrbitTarget({ x: Math.min(Math.max(rect.left + rect.width / 2, 72), window.innerWidth - 72), y: Math.min(Math.max(rect.top + rect.height / 2, 80), window.innerHeight - 90), width: rect.width, height: rect.height })
-      })
-    }
-    measure()
-    const observer = new ResizeObserver(measure)
-    const root = document.querySelector('[data-onboarding-root]')
-    if (root) observer.observe(root)
-    window.addEventListener('resize', measure)
-    window.addEventListener('scroll', measure, true)
-    return () => {
-      cancelAnimationFrame(frame)
-      observer.disconnect()
-      window.removeEventListener('resize', measure)
-      window.removeEventListener('scroll', measure, true)
-    }
-  }, [currentStepId, leetcodePreview, githubQuery, selectedGithub, linkedinInput, resumeFile, skillsList, isSkippingInline])
 
   useEffect(() => {
     setShowAddLater(false)
@@ -407,36 +376,14 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
     })
     setSavedData(updatedState)
 
-    if (reducedMotion) {
-      const nextIdx = currentStepIndex + 1
-      if (nextIdx < stepSequence.length) {
-        setCurrentStepIndex(nextIdx)
-        setIsTransitioning(false)
-      } else {
-        navigate('/auth?mode=signup')
-      }
-      return
+    const nextIdx = currentStepIndex + 1
+    if (nextIdx < stepSequence.length) {
+      setCurrentStepIndex(nextIdx)
+      setIsTransitioning(false)
+    } else {
+      navigate('/auth?mode=signup')
     }
-
-    setDotsBursting(true)
-
-    setTimeout(() => {
-      setCenterRippling(true)
-
-      setTimeout(() => {
-        setCenterRippling(false)
-        setDotsBursting(false)
-
-        const nextIdx = currentStepIndex + 1
-        if (nextIdx < stepSequence.length) {
-          setCurrentStepIndex(nextIdx)
-          setIsTransitioning(false)
-        } else {
-          navigate('/auth?mode=signup')
-        }
-      }, 350 * DEBUG_SLOWMO)
-    }, 1250 * DEBUG_SLOWMO)
-  }, [isTransitioning, savedData, currentStepId, reducedMotion, currentStepIndex, stepSequence.length, navigate])
+  }, [isTransitioning, savedData, currentStepId, currentStepIndex, stepSequence.length, navigate])
 
   const handleAddGithub = () => {
     if (!selectedGithub && !githubQuery.trim()) return
@@ -488,7 +435,9 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
   }
 
   return (
-    <div data-onboarding-root className="fixed inset-0 z-50 bg-[#090B10] text-white flex flex-col items-center justify-between overflow-x-hidden overflow-y-auto overscroll-contain select-none font-sans min-h-[100dvh]">
+    <div data-onboarding-root className="fixed inset-0 z-50 bg-[#0a0a0a] text-white flex flex-col items-center justify-between overflow-x-hidden overflow-y-auto overscroll-contain select-none font-sans min-h-[100dvh] relative isolate">
+      <div aria-hidden="true" className="fixed inset-0 z-0 pointer-events-none"><WaterRippleCanvas className="pointer-events-none" /></div>
+      <div className="relative z-10 w-full flex flex-col items-center justify-between min-h-[100dvh]">
       {/* 1. TOP PROGRESS BAR */}
       <div className="w-full max-w-xl px-6 pt-[max(1rem,env(safe-area-inset-top))] pb-2 flex items-center gap-2 shrink-0">
         {ALL_STEPS.map((s) => {
@@ -517,92 +466,8 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
         })}
       </div>
 
-      {/* 2. CENTER ICON BADGE & SIGNATURE DOTS */}
+      {/* 2. CENTER ICON BADGE */}
       <div className="flex-1 min-h-[520px] w-full max-w-lg flex flex-col items-center justify-center px-6 py-8 relative">
-        <AnimatePresence>
-          {centerRippling && (
-            <motion.div
-              initial={{ scale: 0.6, opacity: 0.35 }}
-              animate={{ scale: 2.2, opacity: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.5 * DEBUG_SLOWMO, ease: 'easeOut' }}
-              style={{ borderColor: stepConfig.color, boxShadow: `0 0 30px ${stepConfig.color}55` }}
-              className="absolute z-0 w-28 h-28 rounded-full border-2 pointer-events-none"
-            />
-          )}
-        </AnimatePresence>
-
-        {/* Color-lit dots orbit the next useful action, staying inside the viewport. */}
-        {!reducedMotion && !dotsBursting && (
-          <motion.div
-            aria-hidden="true"
-            animate={{ left: orbitTarget.x, top: orbitTarget.y }}
-            transition={{ type: 'spring', stiffness: 90, damping: 22, mass: 0.9 }}
-            className="fixed z-[5] pointer-events-none"
-            style={{ width: 1, height: 1 }}
-          >
-            <div className="absolute rounded-full" style={{
-              width: Math.min(Math.max(orbitTarget.width + 54, 112), Math.max(112, window.innerWidth - 24)),
-              height: Math.min(Math.max(orbitTarget.height + 38, 82), 150),
-              left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
-              background: `radial-gradient(ellipse, ${stepConfig.color}16 0%, transparent 72%)`,
-            }} />
-            {[0, 1, 2, 3, 4, 5].map((i) => {
-              const rx = Math.min(Math.max((orbitTarget.width + 54) / 2, 56), Math.max(56, (window.innerWidth - 24) / 2))
-              const ry = Math.min(Math.max((orbitTarget.height + 38) / 2, 41), 75)
-              const points = Array.from({ length: 9 }, (_, j) => {
-                const a = ((j / 8) * Math.PI * 2) + ((i / 6) * Math.PI * 2)
-                return { x: Math.cos(a) * rx, y: Math.sin(a) * ry }
-              })
-              return (
-                <motion.div
-                  key={`${currentStepId}-${i}`}
-                  initial={{ x: points[0].x, y: points[0].y, opacity: 0 }}
-                  animate={{ x: points.map((point) => point.x), y: points.map((point) => point.y), opacity: [0, 1, 1, 1, 1, 1, 1, 1, 0.92] }}
-                  transition={{
-                    x: { duration: 13 + (i % 3) * 1.2, repeat: Infinity, ease: 'linear', delay: i * 0.16 },
-                    y: { duration: 13 + (i % 3) * 1.2, repeat: Infinity, ease: 'linear', delay: i * 0.16 },
-                    opacity: { duration: 0.7, ease: 'easeOut', delay: i * 0.1 },
-                  }}
-                  style={{ backgroundColor: '#fff', boxShadow: `0 0 7px 2px ${stepConfig.color}, 0 0 18px 5px ${stepConfig.color}88` }}
-                  className="absolute left-0 top-0 h-[9px] w-[9px] rounded-full"
-                />
-              )
-            })}
-          </motion.div>
-        )}
-
-        {/* 24 BURST & CONVERGING DOTS ON ADD */}
-        {!reducedMotion && dotsBursting && (
-          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-            {Array.from({ length: 24 }).map((_, i) => {
-              const angle = (i / 24) * 2 * Math.PI
-              const dist = 140 + (i % 4) * 35
-              const midX = Math.cos(angle) * dist
-              const midY = Math.sin(angle) * dist
-              return (
-                <motion.div
-                  key={i}
-                  initial={{ x: 0, y: 0, scale: 0.95, opacity: 1 }}
-                  animate={{
-                    x: [0, midX, 0],
-                    y: [0, midY, 0],
-                    opacity: [0.9, 1, 0.4],
-                  }}
-                  transition={{
-                    duration: 1.25 * DEBUG_SLOWMO,
-                    ease: [0.42, 0, 0.58, 1],
-                    delay: (i % 6) * 0.035,
-                  }}
-                  style={{ backgroundColor: stepConfig.dotColor }}
-                  style={{ boxShadow: `0 0 10px 3px ${stepConfig.color}, 0 0 20px ${stepConfig.color}88` }}
-                  className="absolute z-0 w-2.5 h-2.5 rounded-full"
-                />
-              )
-            })}
-          </div>
-        )}
-
         {/* Center Circular Icon Badge */}
         <motion.div
           layoutId="shared-center-badge"
@@ -958,6 +823,7 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
             Add later
           </motion.button>
         )}
+      </div>
       </div>
     </div>
   )

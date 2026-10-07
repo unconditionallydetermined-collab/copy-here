@@ -1042,20 +1042,13 @@ export default function LandingPage() {
       {/* 5. Three Trust Ticks Stacked VERTICALLY moved further down near bottom */}
       <div
         ref={ticksRef}
-        className="absolute bottom-6 sm:bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-start gap-2 text-xs text-white/50 pointer-events-auto z-20 max-w-[calc(100vw-2rem)]"
+        className="absolute bottom-5 sm:bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2.5 sm:gap-3 text-[11px] sm:text-xs text-white/55 pointer-events-auto z-20 max-w-[calc(100vw-1.5rem)]"
       >
-        <div className="inline-flex items-center gap-2.5 pl-1">
-          <img src="/favicon.svg" alt="" className="w-[15px] h-[15px] object-contain shrink-0" />
-          <Check size={14} className="text-emerald-400 flex-shrink-0" />
-          <span className="pl-0.5">No credit card required</span>
-        </div>
-        <div className="inline-flex items-center gap-2">
-          <Check size={14} className="text-emerald-400 flex-shrink-0" />
-          <span>Syncs in 30 seconds</span>
-        </div>
-        <div className="inline-flex items-center gap-2">
-          <Check size={14} className="text-emerald-400 flex-shrink-0" />
-          <span>Cancel or delete anytime</span>
+        <img src="/favicon.svg" alt="" className="w-9 h-9 sm:w-10 sm:h-10 object-contain shrink-0" />
+        <div className="flex flex-col items-start gap-1.5 min-w-0">
+          <div className="inline-flex items-center gap-2 whitespace-nowrap"><Check size={14} className="text-emerald-400 flex-shrink-0" /><span>No credit card required</span></div>
+          <div className="inline-flex items-center gap-2 whitespace-nowrap"><Check size={14} className="text-emerald-400 flex-shrink-0" /><span>Syncs in 30 seconds</span></div>
+          <div className="inline-flex items-center gap-2 whitespace-nowrap"><Check size={14} className="text-emerald-400 flex-shrink-0" /><span>Cancel or delete anytime</span></div>
         </div>
       </div>
     </main>

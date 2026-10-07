@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import TopBar from './TopBar'
+import WaterRippleCanvas from './WaterRippleCanvas'
 
 export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
-    <div className="app-shell flex h-[100dvh] overflow-hidden">
+    <div className="app-shell relative isolate flex h-[100dvh] overflow-hidden">
+      <div aria-hidden="true" className="fixed inset-0 z-0 pointer-events-none"><WaterRippleCanvas className="pointer-events-none" /></div>
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -31,7 +33,7 @@ export default function AppLayout() {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <TopBar onMenuClick={() => setSidebarOpen(true)} />
         <main
-          className="internal-content flex-1 overflow-y-auto p-4 md:p-6"
+          className="internal-content relative z-10 flex-1 overflow-y-auto p-4 md:p-6"
           style={{
             overscrollBehavior: 'contain',
             paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px))',

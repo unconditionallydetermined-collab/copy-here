@@ -21,17 +21,17 @@ function StatCard({ icon: Icon, label, value, color = 'blue', to }) {
     slate: 'bg-slate-100 text-slate-600',
   }
   const content = (
-    <div className="stat-card flex items-center gap-4">
+    <div className="stat-card flex min-w-0 items-center gap-3 sm:gap-4">
       <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${colorMap[color]}`}>
         <Icon size={20} />
       </div>
-      <div>
-        <p className="text-2xl font-bold text-slate-900">{value}</p>
-        <p className="text-xs text-slate-500 font-medium">{label}</p>
+      <div className="min-w-0">
+        <p className="text-2xl font-bold text-slate-900 leading-tight">{value}</p>
+        <p className="text-xs text-slate-500 font-medium leading-tight">{label}</p>
       </div>
     </div>
   )
-  return to ? <Link to={to}>{content}</Link> : content
+  return to ? <Link to={to} className="block min-w-0">{content}</Link> : content
 }
 
 export default function Dashboard() {
@@ -75,7 +75,7 @@ export default function Dashboard() {
   const completionScore = Math.round(completionItems.filter(i => i.done).length / completionItems.length * 100)
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="min-w-0 space-y-6 animate-fade-in">
       {/* Welcome */}
       <div className="dashboard-welcome rounded-2xl p-5 sm:p-6 text-white">
         <h2 className="text-xl font-bold mb-1">
@@ -91,12 +91,12 @@ export default function Dashboard() {
               style={{ width: `${completionScore}%` }}
             />
           </div>
-          <span className="text-sm font-semibold">{completionScore}% Profile Complete</span>
+          <span className="shrink-0 whitespace-nowrap text-xs sm:text-sm font-semibold">{completionScore}% Profile Complete</span>
         </div>
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid min-w-0 grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         <StatCard icon={Zap}       label="Skills"       value={analytics?.skillsCount || 0}       color="blue"   to="/skills" />
         <StatCard icon={FolderOpen} label="Projects"    value={analytics?.projectsCount || 0}     color="purple" to="/projects" />
         <StatCard icon={Award}     label="Certificates" value={analytics?.certificatesCount || 0} color="amber"  to="/certificates" />
@@ -104,9 +104,9 @@ export default function Dashboard() {
       </div>
 
       {/* Charts row */}
-      <div className="grid lg:grid-cols-2 gap-5">
+      <div className="grid min-w-0 lg:grid-cols-2 gap-5">
         {/* Skills by Category */}
-        <div className="card p-5">
+        <div className="card min-w-0 p-4 sm:p-5">
           <h3 className="text-sm font-semibold text-slate-800 mb-4">Skills by Category</h3>
           {skillChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
@@ -129,7 +129,7 @@ export default function Dashboard() {
         </div>
 
         {/* Job Applications */}
-        <div className="card p-5">
+        <div className="card min-w-0 p-4 sm:p-5">
           <h3 className="text-sm font-semibold text-slate-800 mb-4">Applications by Status</h3>
           {jobChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
@@ -152,9 +152,9 @@ export default function Dashboard() {
       </div>
 
       {/* Profile completion checklist + Goals row */}
-      <div className="grid lg:grid-cols-2 gap-5">
+      <div className="grid min-w-0 lg:grid-cols-2 gap-5">
         {/* Completion checklist */}
-        <div className="card p-5">
+        <div className="card min-w-0 p-4 sm:p-5">
           <h3 className="text-sm font-semibold text-slate-800 mb-4">Complete Your Profile</h3>
           <div className="space-y-2.5">
             {completionItems.map(({ label, done, to }) => (
@@ -174,7 +174,7 @@ export default function Dashboard() {
         </div>
 
         {/* Goals summary */}
-        <div className="card p-5">
+        <div className="card min-w-0 p-4 sm:p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-slate-800">Goals Progress</h3>
             <Link to="/goals" className="text-xs text-blue-600 font-medium flex items-center gap-1">

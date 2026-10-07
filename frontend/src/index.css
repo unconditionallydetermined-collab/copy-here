@@ -1100,7 +1100,7 @@ a:not(:disabled):active,
   flex: none;
 }
 .internal-content {
-  background: radial-gradient(ellipse at 50% -24%, rgba(14, 165, 233, 0.07), transparent 46%), var(--internal-bg);
+  background: radial-gradient(ellipse at 50% -24%, rgba(14, 165, 233, 0.07), transparent 46%), transparent;
 }
 .app-shell .card,
 .app-shell .stat-card,
@@ -1166,3 +1166,10 @@ a:not(:disabled):active,
   .internal-topbar, .internal-sidebar { background: #0d0e11; backdrop-filter: none; -webkit-backdrop-filter: none; }
   .app-drawer-scrim { backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
+
+
+/* Keep the shared dotted canvas visible between app surfaces and prevent dashboard overflow. */
+.app-shell { overflow: hidden; }
+.app-shell .internal-content { min-width: 0; overflow-x: hidden; }
+.app-shell .internal-content > * { min-width: 0; max-width: 100%; }
+.app-shell .card, .app-shell .stat-card { min-width: 0; }
