@@ -4,7 +4,7 @@ import logger from './logger'
 
 const getBaseUrl = () => {
   const envUrl = import.meta.env.VITE_API_BASE_URL
-  if (!envUrl) return import.meta.env.PROD ? 'https://career-sync-snh1.onrender.com/api/v1' : '/api/v1'
+  if (!envUrl) return import.meta.env.PROD ? 'https://career-sync-backend-71c1.onrender.com/api/v1' : '/api/v1'
   const trimmed = envUrl.replace(/\/+$/, '')
   return trimmed.endsWith('/api/v1') ? trimmed : `${trimmed}/api/v1`
 }
