@@ -90,11 +90,11 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
     const y = clientY !== undefined ? clientY - rect.top : rect.height / 2
 
     // Calibrated soft ripple: peak radius ~220px, settles within ~900ms
-    const intensity = options.intensity ?? 70
-    const waveSpeed = options.speed ?? 220
-    const waveWidth = options.width ?? 36
-    const maxRadius = Math.min(220, options.maxRadius ?? 220)
-    const blastRadius = options.blastRadius ?? 60
+    const intensity = options.intensity ?? 105
+    const waveSpeed = options.speed ?? 270
+    const waveWidth = options.width ?? 54
+    const maxRadius = Math.min(360, options.maxRadius ?? 330)
+    const blastRadius = options.blastRadius ?? 90
 
     wavesRef.current.push({
       x,

@@ -431,11 +431,11 @@ export default function LandingPage() {
             // Trigger single gentle ripple and damping boost
             if (rippleRef.current) {
               rippleRef.current.triggerSlam(geom.slotCenterX, geom.slotCenterY, {
-                intensity: 70,
-                speed: 220,
-                width: 36,
-                maxRadius: 220,
-                blastRadius: 60,
+                intensity: 105,
+                speed: 270,
+                width: 54,
+                maxRadius: 330,
+                blastRadius: 90,
               })
               rippleRef.current.boostDamping(1200)
             }
