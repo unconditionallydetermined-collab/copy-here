@@ -227,6 +227,18 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
     }
 
     canvas.addEventListener('pointerdown', handlePointerDown)
+    const handleTouchStart = (e) => {
+      if (e.touches && e.touches[0]) {
+        triggerHaptic([80, 40, 100])
+        triggerSlamInternal(e.touches[0].clientX, e.touches[0].clientY, {
+          intensity: 110,
+          speed: 260,
+          maxRadius: 300,
+          blastRadius: 100,
+        })
+      }
+    }
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: true })
     canvas.addEventListener('pointermove', handlePointerMove)
 
     let lastTime = performance.now()
@@ -438,6 +450,7 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
     return () => {
       window.removeEventListener('resize', handleResize)
       canvas.removeEventListener('pointerdown', handlePointerDown)
+      canvas.removeEventListener('touchstart', handleTouchStart)
       canvas.removeEventListener('pointermove', handlePointerMove)
       if (animRef.current) {
         cancelAnimationFrame(animRef.current)
