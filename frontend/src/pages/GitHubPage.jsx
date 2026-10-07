@@ -19,15 +19,23 @@ export default function GitHubPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const handleSync = async () => {
-    if (!username.trim()) { toast.error('Enter a GitHub username in your Profile first'); return }
+  const handleSync = async (e) => {
+    if (e) e.preventDefault()
+    const cleanUsername = username.trim()
+    if (!cleanUsername) {
+      toast.error('Please enter a GitHub username')
+      return
+    }
     setSyncing(true)
     try {
-      const { data: d } = await githubApi.sync(username)
+      const { data: d } = await githubApi.sync(cleanUsername)
       setData(d)
-      toast.success('GitHub data synced!')
-    } catch { toast.error('Failed to fetch GitHub data. Check the username.') }
-    finally { setSyncing(false) }
+      toast.success(`GitHub data synced for @${cleanUsername}!`)
+    } catch (err) {
+      toast.error('GitHub user not found or rate-limited. Verify username.')
+    } finally {
+      setSyncing(false)
+    }
   }
 
   if (loading) return <div className="skeleton h-64 rounded-xl" />
@@ -35,25 +43,37 @@ export default function GitHubPage() {
   return (
     <div className="space-y-5 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="page-title">GitHub Integration</h2>
-          <p className="page-subtitle">View your public GitHub statistics</p>
+          <p className="page-subtitle">Connect and sync public repository statistics</p>
         </div>
-        <button onClick={handleSync} disabled={syncing} className="btn btn-primary">
-          {syncing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-          {syncing ? 'Syncing...' : data ? 'Sync Again' : 'Fetch GitHub Data'}
-        </button>
+        <form onSubmit={handleSync} className="flex items-center gap-2">
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="GitHub username"
+            className="input text-sm px-3 py-1.5 w-48 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            type="submit"
+            disabled={syncing}
+            className="btn btn-primary active:scale-[0.97] transition-transform duration-150"
+          >
+            {syncing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+            {syncing ? 'Syncing...' : data ? 'Sync Again' : 'Connect'}
+          </button>
+        </form>
       </div>
 
       {!data ? (
         <div className="card p-12 flex flex-col items-center justify-center text-center">
           <Github size={40} className="text-slate-300 mb-4" />
-          <h3 className="text-sm font-semibold text-slate-700 mb-1">Connect GitHub</h3>
-          <p className="text-xs text-slate-500 mb-4 max-w-xs">
-            Add your GitHub username in Profile settings, then click "Fetch GitHub Data" to load your stats.
+          <h3 className="text-sm font-semibold text-slate-700 mb-1">Connect GitHub Profile</h3>
+          <p className="text-xs text-slate-500 mb-4 max-w-sm">
+            Enter your GitHub username above and tap Connect to sync your repositories and contribution stats.
           </p>
-          <a href="/profile" className="btn btn-secondary btn-sm">Go to Profile →</a>
         </div>
       ) : (
         <>
