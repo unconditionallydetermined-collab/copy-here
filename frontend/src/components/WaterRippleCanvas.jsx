@@ -26,34 +26,36 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
     const x = clientX !== undefined ? clientX - rect.left : rect.width / 2
     const y = clientY !== undefined ? clientY - rect.top : rect.height / 2
 
-    const intensity = options.intensity || 190
-    const carveRadius = options.carveRadius || 34
+    const intensity = options.intensity || 320
+    const blastRadius = options.blastRadius || 110
 
+    // Concentric propagating wave
     wavesRef.current.push({
       x,
       y,
-      radius: carveRadius * 0.5,
-      speed: 360,
-      maxRadius: Math.max(rect.width, rect.height) * 0.85,
+      radius: 0,
+      speed: 520,
+      maxRadius: Math.max(rect.width, rect.height) * 0.95,
       intensity,
-      width: 50,
+      width: 58,
       life: 1.0,
-      decay: 0.75,
+      decay: 0.65,
     })
 
+    // Immediate physical grid splash displacement
     const dots = dotsRef.current
-    const blastRadius = carveRadius * 2.2
     for (let i = 0; i < dots.length; i++) {
       const dot = dots[i]
-      const dx = dot.ox - x
-      const dy = dot.oy - y
-      const dist = Math.sqrt(dx * dx + dy * dy)
+      const dx = dot.x - x
+      const dy = dot.y - y
+      const distSq = dx * dx + dy * dy
 
-      if (dist < blastRadius && dist > 0.001) {
-        const factor = dist < carveRadius ? 0.75 : Math.max(0, 1 - (dist - carveRadius) / (blastRadius - carveRadius))
-        const force = factor * (intensity * 0.45)
-        dot.vx += (dx / dist) * force
-        dot.vy += (dy / dist) * force
+      if (distSq < blastRadius * blastRadius && distSq > 0.001) {
+        const dist = Math.sqrt(distSq)
+        const falloff = 1 - dist / blastRadius
+        const blastForce = falloff * 260
+        dot.vx += (dx / dist) * blastForce
+        dot.vy += (dy / dist) * blastForce
       }
     }
 
@@ -72,9 +74,9 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
     let dpr = window.devicePixelRatio || 1
 
     const SPACING = Math.max(22, Math.min(28, Math.floor(Math.min(width, height) / 32)))
-    const BASE_DOT_RADIUS = 1.3
-    const K = 22
-    const C = 2.4
+    const BASE_DOT_RADIUS = 1.35
+    const K = 24
+    const C = 3.2
 
     const initGrid = () => {
       dpr = window.devicePixelRatio || 1
@@ -110,7 +112,7 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
     window.addEventListener('resize', handleResize)
 
     const handlePointerDown = (e) => {
-      triggerSlamInternal(e.clientX, e.clientY, { intensity: 160 })
+      triggerSlamInternal(e.clientX, e.clientY, { intensity: 300, blastRadius: 100 })
     }
 
     canvas.addEventListener('pointerdown', handlePointerDown)
@@ -126,12 +128,12 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
       const waves = wavesRef.current
       const lights = hoverLightsRef.current
 
-      // 1. Advance waves
+      // 1. Advance waves & propagate impulse across grid dots
       for (let i = waves.length - 1; i >= 0; i--) {
         const w = waves[i]
         w.radius += w.speed * dt
         w.life -= dt * w.decay
-        w.intensity *= Math.exp(-1.6 * dt)
+        w.intensity *= Math.exp(-1.4 * dt)
 
         const waveFrontWidth = w.width
         const rMin = Math.max(0, w.radius - waveFrontWidth)
@@ -149,11 +151,11 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
             const dist = Math.sqrt(distSq)
             const diff = Math.abs(dist - w.radius)
             const radialFalloff = 0.5 * (1 + Math.cos((Math.PI * diff) / waveFrontWidth))
-            const distanceAttenuation = 1 / (1 + dist * 0.0025)
+            const distanceAttenuation = 1 / (1 + dist * 0.002)
             const impulse = w.intensity * radialFalloff * distanceAttenuation
 
-            dot.vx += (dx / dist) * impulse * dt * 20
-            dot.vy += (dy / dist) * impulse * dt * 20
+            dot.vx += (dx / dist) * impulse * dt * 30
+            dot.vy += (dy / dist) * impulse * dt * 30
           }
         }
 
@@ -162,7 +164,7 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
         }
       }
 
-      // 2. Fluid spring physics
+      // 2. Spring Physics
       for (let i = 0; i < dots.length; i++) {
         const dot = dots[i]
         const dispX = dot.x - dot.ox
@@ -178,11 +180,11 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
         dot.y += dot.vy * dt
       }
 
-      // 3. Render dots with light-up under icons (no drag)
+      // 3. Render dots with visible grid splash displacement & glow
       ctx.fillStyle = '#0a0a0a'
       ctx.fillRect(0, 0, width, height)
 
-      const LIGHT_RADIUS = 36
+      const LIGHT_RADIUS = 38
       const LIGHT_RADIUS_SQ = LIGHT_RADIUS * LIGHT_RADIUS
 
       for (let i = 0; i < dots.length; i++) {
@@ -191,10 +193,8 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
         const dy = dot.y - dot.oy
         const disp = Math.sqrt(dx * dx + dy * dy)
 
-        // Wave excitation
-        let energy = Math.min(1, disp / 10)
+        let energy = Math.min(1, disp / 6)
 
-        // Light-up effect from overhead icons (gentle glow instead of drag)
         for (let l = 0; l < lights.length; l++) {
           const lx = lights[l].x - dot.ox
           const ly = lights[l].y - dot.oy
@@ -205,11 +205,11 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
           }
         }
 
-        const alpha = 0.35 + 0.58 * energy
-        const radius = BASE_DOT_RADIUS + 0.8 * energy
+        const alpha = 0.35 + 0.6 * energy
+        const radius = BASE_DOT_RADIUS + 1.1 * energy
 
         ctx.fillStyle = energy > 0.08
-          ? `rgba(${Math.round(200 + 55 * energy)}, ${Math.round(210 + 45 * energy)}, 255, ${alpha.toFixed(3)})`
+          ? `rgba(${Math.round(210 + 45 * energy)}, ${Math.round(220 + 35 * energy)}, 255, ${alpha.toFixed(3)})`
           : 'rgba(180, 185, 195, 0.35)'
 
         ctx.beginPath()
