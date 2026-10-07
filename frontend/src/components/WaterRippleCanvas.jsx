@@ -1,5 +1,16 @@
 import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
 
+// Safe haptic feedback with varying fluid intensity
+const triggerHaptic = (pattern) => {
+  if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+    try {
+      navigator.vibrate(pattern)
+    } catch {
+      // Ignore vibration unsupported/permission errors
+    }
+  }
+}
+
 const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
   { className = '', onSlam },
   ref
@@ -15,6 +26,7 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
   const onSlamRef = useRef(onSlam)
   const boostUntilRef = useRef(0)
   const protectedRectRef = useRef(null)
+  const lastHapticTimeRef = useRef(0)
 
   // Always keep latest onSlam callback without rebuilding canvas
   onSlamRef.current = onSlam
@@ -25,6 +37,12 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
     },
     displaceAt: (clientX, clientY, force = 12) => {
       displaceAtCoord(clientX, clientY, Math.min(force, 15))
+      const now = performance.now()
+      if (now - lastHapticTimeRef.current > 75) {
+        lastHapticTimeRef.current = now
+        const hapticMs = Math.max(6, Math.min(22, Math.round(force * 0.9)))
+        triggerHaptic(hapticMs)
+      }
     },
     streamGlowToTarget: () => {},
     setHoverLights: (lights = [], dimFactor = 1.0) => {
@@ -39,12 +57,11 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
         protectedRectRef.current = null
         return
       }
-      // Expand by 16px safety padding
       protectedRectRef.current = {
-        left: rect.left - 16,
-        top: rect.top - 16,
-        right: rect.right + 16,
-        bottom: rect.bottom + 16,
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
       }
     },
     isSettled: () => {
@@ -55,9 +72,9 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
         const dx = dot.x - dot.ox
         const dy = dot.y - dot.oy
         const dispSq = dx * dx + dy * dy
-        if (dispSq >= 0.36) return false // sqrt(dispSq) >= 0.6px
+        if (dispSq >= 0.36) return false
         const velSq = dot.vx * dot.vx + dot.vy * dot.vy
-        if (velSq >= 4) return false // sqrt(velSq) >= 2px/s
+        if (velSq >= 4) return false
       }
       return true
     },
@@ -119,11 +136,19 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
 
       if (dist < blastRadius && dist > 0.001) {
         const factor = Math.max(0, 1 - dist / blastRadius)
-        // High particle impact force
         const force = factor * (intensity * 0.38)
         dot.vx += (dx / dist) * force
         dot.vy += (dy / dist) * force
       }
+    }
+
+    // Varying intensity haptic feedback for fluid wave / slam
+    if (intensity >= 120) {
+      triggerHaptic([32, 22, 48])
+    } else if (intensity >= 70) {
+      triggerHaptic([18, 14, 26])
+    } else {
+      triggerHaptic(12)
     }
 
     if (typeof onSlamRef.current === 'function') {
@@ -180,6 +205,30 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
     }
     window.addEventListener('resize', handleResize)
 
+    // Interactive pointer fluid ripples with varying haptic intensity
+    const handlePointerDown = (e) => {
+      triggerSlamInternal(e.clientX, e.clientY, {
+        intensity: 85,
+        speed: 230,
+        maxRadius: 260,
+        blastRadius: 90,
+      })
+    }
+
+    const handlePointerMove = (e) => {
+      if (e.buttons > 0) {
+        displaceAtCoord(e.clientX, e.clientY, 14)
+        const now = performance.now()
+        if (now - lastHapticTimeRef.current > 65) {
+          lastHapticTimeRef.current = now
+          triggerHaptic(8)
+        }
+      }
+    }
+
+    canvas.addEventListener('pointerdown', handlePointerDown)
+    canvas.addEventListener('pointermove', handlePointerMove)
+
     let lastTime = performance.now()
 
     const render = (now) => {
@@ -199,7 +248,7 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
       const dimFactor = glowDimRef.current
       const protRect = protectedRectRef.current
 
-      // Maintain trailing water wake stamps from moving orbs (skimming stone effect)
+      // Trailing water wake stamps from moving orbs
       const wakePoints = wakePointsRef.current
       if (now - lastWakeStampRef.current >= 28) {
         lastWakeStampRef.current = now
@@ -216,14 +265,13 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
         }
       }
 
-      // Purge old wake stamps
       for (let i = wakePoints.length - 1; i >= 0; i--) {
         if (now - wakePoints[i].birth > wakePoints[i].maxAge) {
           wakePoints.splice(i, 1)
         }
       }
 
-      // Gentle fluid skim displacement from moving orbs (water skimming stone that never sinks)
+      // Gentle fluid skim displacement from moving orbs
       for (let l = 0; l < lights.length; l++) {
         const light = lights[l]
         if (!light.moving) continue
@@ -298,7 +346,6 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
         dot.x += dot.vx * dt
         dot.y += dot.vy * dt
 
-        // Clamp displacement to <= 14px
         const currentDispSq = (dot.x - dot.ox) ** 2 + (dot.y - dot.oy) ** 2
         if (currentDispSq > MAX_DISP_SQ) {
           const currentDisp = Math.sqrt(currentDispSq)
@@ -308,14 +355,12 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
         }
       }
 
-      // 3. Render dots with controlled subtle highlight under icons
+      // 3. Render dots
       ctx.fillStyle = '#0a0a0a'
       ctx.fillRect(0, 0, width, height)
 
-      // 30% larger glow radius under orbs (17 -> 22px)
       const ACTIVE_ORB_LIGHT_RADIUS = 48
       const ACTIVE_ORB_LIGHT_RADIUS_SQ = ACTIVE_ORB_LIGHT_RADIUS * ACTIVE_ORB_LIGHT_RADIUS
-      // Bottom fade margin calibrated dynamically
 
       for (let i = 0; i < dots.length; i++) {
         const dot = dots[i]
@@ -323,7 +368,6 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
         const dy = dot.y - dot.oy
         const disp = Math.sqrt(dx * dx + dy * dy)
 
-        // Wave displacement excitation
         let energy = Math.min(1, disp / 7)
 
         // Dynamic fluid glow under currently passing orbs
@@ -338,7 +382,7 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
           }
         }
 
-        // Skimming water wake: glowing trail lingering behind moving orbs
+        // Skimming water wake
         for (let w = 0; w < wakePoints.length; w++) {
           const wp = wakePoints[w]
           const wx = wp.x - dot.ox
@@ -354,7 +398,7 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
           }
         }
 
-        // Protected zone: keep dot energy <= 0.2 inside content exclusion zone
+        // Dot highlights suppressed inside exclusion zone
         if (protRect) {
           if (
             dot.ox >= protRect.left &&
@@ -362,17 +406,16 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
             dot.oy >= protRect.top &&
             dot.oy <= protRect.bottom
           ) {
-            energy = Math.min(energy, 0.2)
+            energy = 0
           }
         }
 
-        // Bottom edge gradient: smooth fade out towards the bottom edge only
+        // Bottom edge gradient
         const distFromBottom = height - dot.oy
         const BOTTOM_FADE_MARGIN = Math.max(220, Math.min(320, height * 0.3))
         const bottomFactor = Math.min(1, Math.max(0, distFromBottom / BOTTOM_FADE_MARGIN))
         const bottomGradient = 0.5 - 0.5 * Math.cos(bottomFactor * Math.PI)
 
-        // Dynamic radius and luminous fluid particle coloring with bottom gradient attenuation
         const baseAlpha = Math.min(0.92, 0.40 + 0.52 * energy)
         const alpha = baseAlpha * bottomGradient
         const radius = (BASE_DOT_RADIUS + 0.85 * energy) * Math.max(0.65, bottomGradient)
@@ -394,16 +437,18 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
 
     return () => {
       window.removeEventListener('resize', handleResize)
+      canvas.removeEventListener('pointerdown', handlePointerDown)
+      canvas.removeEventListener('pointermove', handlePointerMove)
       if (animRef.current) {
         cancelAnimationFrame(animRef.current)
       }
     }
-  }, []) // Empty deps ensures grid is never rebuilt on re-render
+  }, [])
 
   return (
     <canvas
       ref={canvasRef}
-      className={'absolute inset-0 block w-full h-full pointer-events-none select-none ' + className}
+      className={'absolute inset-0 block w-full h-full ' + className}
     />
   )
 })

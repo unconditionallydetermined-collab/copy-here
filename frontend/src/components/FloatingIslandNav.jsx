@@ -1,28 +1,15 @@
 import React, { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Circle, X, List } from '@phosphor-icons/react'
+import { Link, useLocation } from 'react-router-dom'
+import { TrendingUp } from 'lucide-react'
 
 export default function FloatingIslandNav() {
   const [isOpen, setIsOpen] = useState(false)
+  const location = useLocation()
 
   const navLinks = [
-    { label: 'Overview', href: '#hero' },
-    { label: 'Benefits', href: '#benefits' },
-    { label: 'How it works', href: '#how-it-works' },
-    { label: 'Proof', href: '#proof' },
-    { label: 'FAQ', href: '#faq' },
+    { label: 'Home', href: '/' },
+    { label: 'Why CareerSync', href: '/info' },
   ]
-
-  const handleLinkClick = (e, href) => {
-    if (href.startsWith('#')) {
-      e.preventDefault()
-      setIsOpen(false)
-      const el = document.querySelector(href)
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth' })
-      }
-    }
-  }
 
   return (
     <>
@@ -37,7 +24,7 @@ export default function FloatingIslandNav() {
             to="/"
             className="flex items-center gap-2 px-2 py-1 text-white font-bold text-sm tracking-tight focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:outline-none rounded-md"
           >
-            <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center">
+            <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center text-slate-950 font-bold">
               <div className="w-2 h-2 rounded-full bg-[#181818]" />
             </div>
             <span>CareerSync</span>
@@ -45,19 +32,23 @@ export default function FloatingIslandNav() {
 
           {/* Desktop Links */}
           <div className="hidden md:flex items-center gap-1">
-            {navLinks.map((link) => (
-              <a
-                key={link.label}
-                href={link.href}
-                onClick={(e) => handleLinkClick(e, link.href)}
-                className="px-3 py-1.5 text-sm font-medium text-slate-300 hover:text-white rounded-full transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:outline-none"
-              >
-                {link.label}
-              </a>
-            ))}
+            {navLinks.map((link) => {
+              const isActive = location.pathname === link.href
+              return (
+                <Link
+                  key={link.label}
+                  to={link.href}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:outline-none ${
+                    isActive ? 'text-white bg-white/10' : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              )
+            })}
           </div>
 
-          {/* Header Action Buttons per B1 & B2: 8px vertical 12px horizontal padding token */}
+          {/* Header Action Buttons */}
           <div className="hidden sm:flex items-center gap-2">
             <Link
               to="/auth?mode=signin"
@@ -67,13 +58,13 @@ export default function FloatingIslandNav() {
             </Link>
             <Link
               to="/auth"
-              className="py-2 px-3 text-sm font-semibold text-slate-950 bg-white rounded-full hover:bg-slate-200 active:scale-[0.98] transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:outline-none"
+              className="py-2 px-3.5 text-sm font-semibold text-slate-950 bg-white rounded-full hover:bg-slate-200 active:scale-[0.98] transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:outline-none"
             >
-              Get started
+              Find your dream job
             </Link>
           </div>
 
-          {/* Mobile Hamburger Morph: rotates and translates into perfect X */}
+          {/* Mobile Hamburger Morph */}
           <button
             type="button"
             onClick={() => setIsOpen(!isOpen)}
@@ -95,24 +86,22 @@ export default function FloatingIslandNav() {
         </nav>
       </header>
 
-      {/* Screen filling Modal Expansion with Heavy Glass Effect & Staggered Mask Reveal */}
+      {/* Screen filling Modal Expansion with Glass Effect */}
       {isOpen && (
-        <div
-          className="fixed inset-0 z-40 sm:hidden backdrop-blur-3xl bg-black/80 flex flex-col justify-center px-8 transition-opacity duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]"
-        >
+        <div className="fixed inset-0 z-40 sm:hidden backdrop-blur-3xl bg-black/80 flex flex-col justify-center px-8 transition-opacity duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]">
           <div className="flex flex-col gap-6 text-center">
             {navLinks.map((link, idx) => (
               <div key={link.label} className="overflow-hidden">
-                <a
-                  href={link.href}
-                  onClick={(e) => handleLinkClick(e, link.href)}
+                <Link
+                  to={link.href}
+                  onClick={() => setIsOpen(false)}
                   style={{
                     animationDelay: `${100 + idx * 50}ms`,
                   }}
                   className="inline-block text-2xl font-semibold text-white tracking-tight animate-stagger-up active:scale-[0.98] transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]"
                 >
                   {link.label}
-                </a>
+                </Link>
               </div>
             ))}
 
@@ -129,7 +118,7 @@ export default function FloatingIslandNav() {
                 onClick={() => setIsOpen(false)}
                 className="w-full py-2 px-3 rounded-xl bg-white text-slate-950 font-semibold text-base active:scale-[0.98] transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]"
               >
-                Get started
+                Find your dream job
               </Link>
             </div>
           </div>

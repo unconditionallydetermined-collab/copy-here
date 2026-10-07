@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { Link } from 'react-router-dom'
-import { Lightbulb, Code2, ArrowRight, Check, ChevronDown, TrendingUp } from 'lucide-react'
+import { Lightbulb, Code2, ArrowRight, Check } from 'lucide-react'
 import { Github, Linkedin } from '../components/Icons'
 import WaterRippleCanvas from '../components/WaterRippleCanvas'
+import FloatingIslandNav from '../components/FloatingIslandNav'
 
 const PLATFORM_CONFIG = {
   github: {
@@ -53,20 +54,25 @@ const DRIFT_CONFIG = {
   skills:   { T1: 10.5, phi1: 1.7, T2: 9.1,  phi2: 3.9 },
 }
 
+const REVEAL_WORDS = [
+  'Traditional', 'resumes', 'hide', 'your', 'true', 'ability.',
+  'Stop', 'sending', 'static', 'resumes', 'into', 'automated', 'filters.',
+  'Find', 'your', 'dream', 'job', 'easily.', 'Match', 'careers', 'that', 'fit', 'your', 'skills.'
+]
+
 function AnimatedChars({ text, baseDelay = 0, speed = 18 }) {
   return (
     <>
       {text.split('').map((char, i) => (
         <span
           key={i}
-          className="inline-block animate-char-reveal will-change-transform opacity-0"
+          className="inline-block animate-char-reveal will-change-transform"
           style={{
             animationDelay: `${baseDelay + i * speed}ms`,
-            animationFillMode: 'forwards',
-            whiteSpace: char === ' ' ? 'pre' : 'normal',
+            animationFillMode: 'both',
           }}
         >
-          {char}
+          {char === ' ' ? ' ' : char}
         </span>
       ))}
     </>
@@ -75,10 +81,10 @@ function AnimatedChars({ text, baseDelay = 0, speed = 18 }) {
 
 export default function LandingPage() {
   const [initialRandomBadge] = useState(() => {
-    const randomIndex = Math.floor(Math.random() * BADGES.length)
-    return BADGES[randomIndex]
+    return BADGES[Math.floor(Math.random() * BADGES.length)]
   })
 
+  // Stage 2 state
   const [activeStageId, setActiveStageId] = useState(initialRandomBadge)
   const [exitingStageId, setExitingStageId] = useState(null)
   const [exitingOpacity, setExitingOpacity] = useState(1.0)
@@ -88,42 +94,52 @@ export default function LandingPage() {
   const [ctaShimmerActive, setCtaShimmerActive] = useState(false)
   const [ctaShimmerCycle, setCtaShimmerCycle] = useState(0)
   const [pulseRingActive, setPulseRingActive] = useState(false)
-  const [isLockedAtBottom, setIsLockedAtBottom] = useState(false)
+  const [orbsParked, setOrbsParked] = useState(false)
 
-  const containerRef = useRef(null)
-  const topFoldRef = useRef(null)
-  const bottomFoldRef = useRef(null)
+  // Scroll reveal and lock state
+  const [isLocked, setIsLocked] = useState(false)
+  const [revealedCount, setRevealedCount] = useState(0)
+  const [actionsVisible, setActionsVisible] = useState(false)
+
+  // Refs
+  const screen1TrackRef = useRef(null)
+  const screen2Ref = useRef(null)
   const heroWrapperRef = useRef(null)
   const centerSlotRef = useRef(null)
+  const headingRef = useRef(null)
+  const captionRef = useRef(null)
   const buttonRef = useRef(null)
   const ticksBottomRef = useRef(null)
+  const footerRef = useRef(null)
+  const navRef = useRef(null)
   const pulseTimerRef = useRef(null)
   const rippleRef = useRef(null)
   const badgeDomRefs = useRef({})
   const cometTailRef = useRef(null)
 
+  const isSnappingRef = useRef(false)
+  const revealCompleteTimeRef = useRef(0)
+  const isRevealCompleteRef = useRef(false)
+
   const geomRef = useRef({
-    heroCenterX: 0,
-    heroCenterY: 0,
     slotCenterX: 0,
     slotCenterY: 0,
-    ticksTop: 9999,
     exclusionRect: { left: 0, top: 0, right: 0, bottom: 0 },
-    rx: 210,
-    ry: 210,
+    rx: 200,
+    ry: 200,
     iconRadius: 26,
-    pad: 24,
-    height: 800,
+    pad: 28,
+    isParked: false,
+    parkedPositions: {},
   })
 
   const slotAssignRef = useRef({
-    github: null,
-    leetcode: 0,
-    linkedin: 1,
-    skills: 2,
+    github: 0,
+    leetcode: 1,
+    linkedin: 2,
+    skills: null,
   })
 
-  // Initialize slots dynamically around initial active badge
   useEffect(() => {
     const floating = BADGES.filter((b) => b !== initialRandomBadge)
     const newSlots = {}
@@ -143,139 +159,435 @@ export default function LandingPage() {
     incomingId: null,
     returningId: null,
     returningOpacity: 0,
-    dockSide: 'right',
-    brakeStartAngle: 0,
-    brakeDelta: 0,
-    brakeDuration: 2800,
-    sharedPhase: 0,
-    currentSpeed: 0.45,
-    targetSpeed: 0.45,
-    lastTime: performance.now(),
-    lastCycleEndTime: performance.now(),
-    readTargetCount: PLATFORM_CONFIG[initialRandomBadge].targetPercent,
-    readCountStart: 0,
-    readCountDone: true,
-    lastSettleCheck: 0,
-    pulseStage: 0,
-    pulseStartTime: 0,
-    waitingIncomingId: null,
     cometStartX: 0,
     cometStartY: 0,
+    cometTargetX: 0,
+    cometTargetY: 0,
+    currentSpeed: (26 * Math.PI) / 180,
+    targetSpeed: (26 * Math.PI) / 180,
+    sharedPhase: 0,
+    lastTime: performance.now(),
+    lastCycleEndTime: performance.now(),
+    cycleCount: 0,
   })
 
   const iconPhysicsRef = useRef({
-    github:   { x: 0, y: 0, vx: 0, vy: 0, opacity: 0.85, scale: 1 },
-    leetcode: { x: 0, y: 0, vx: 0, vy: 0, opacity: 0.85, scale: 1 },
-    linkedin: { x: 0, y: 0, vx: 0, vy: 0, opacity: 0.85, scale: 1 },
-    skills:   { x: 0, y: 0, vx: 0, vy: 0, opacity: 0.85, scale: 1 },
+    github:   { x: 0, y: 0, opacity: 1, scale: 1, vx: 0, vy: 0 },
+    leetcode: { x: 0, y: 0, opacity: 1, scale: 1, vx: 0, vy: 0 },
+    linkedin: { x: 0, y: 0, opacity: 1, scale: 1, vx: 0, vy: 0 },
+    skills:   { x: 0, y: 0, opacity: 0, scale: 1, vx: 0, vy: 0 },
   })
 
+  // Reduced motion preference
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
     setReducedMotion(mq.matches)
-    const handler = (e) => setReducedMotion(e.matches)
+    if (mq.matches) {
+      setRevealedCount(REVEAL_WORDS.length)
+      setActionsVisible(true)
+    }
+    const handler = (e) => {
+      setReducedMotion(e.matches)
+      if (e.matches) {
+        setRevealedCount(REVEAL_WORDS.length)
+        setActionsVisible(true)
+      }
+    }
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
   }, [])
 
-  // Lock user in bottom fold once reached
+  // SCREEN 1: Scroll-driven reveal listener
   useEffect(() => {
-    const bottomEl = bottomFoldRef.current
-    if (!bottomEl) return
+    if (isLocked || reducedMotion) return
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting && entry.intersectionRatio >= 0.55) {
-            setIsLockedAtBottom(true)
-          }
+    let rafId = null
+
+    const handleScroll = () => {
+      if (!screen1TrackRef.current) return
+      const track = screen1TrackRef.current
+      const rect = track.getBoundingClientRect()
+      const scrollDist = -rect.top
+      const maxScrollDist = track.scrollHeight - window.innerHeight
+
+      if (maxScrollDist <= 0) return
+
+      // Linear mapping to first ~85% of track (with rest zone 85-100%)
+      const progress = Math.min(1, Math.max(0, scrollDist / (maxScrollDist * 0.85)))
+      const targetWords = Math.floor(progress * REVEAL_WORDS.length)
+      setRevealedCount(targetWords)
+
+      const isComplete = targetWords >= REVEAL_WORDS.length
+      if (isComplete && !isRevealCompleteRef.current) {
+        isRevealCompleteRef.current = true
+        revealCompleteTimeRef.current = performance.now()
+        setActionsVisible(true)
+      } else if (!isComplete && isRevealCompleteRef.current) {
+        isRevealCompleteRef.current = false
+        setActionsVisible(false)
+      }
+
+      // If user drags scrollbar and Screen 2 becomes more than 35% visible after reveal complete
+      if (isComplete && screen2Ref.current && !isSnappingRef.current) {
+        const s2Rect = screen2Ref.current.getBoundingClientRect()
+        const visibleHeight = Math.max(0, window.innerHeight - s2Rect.top)
+        if (visibleHeight > window.innerHeight * 0.35) {
+          triggerSnap()
+        }
+      }
+    }
+
+    const onScroll = () => {
+      if (!rafId) {
+        rafId = requestAnimationFrame(() => {
+          handleScroll()
+          rafId = null
         })
-      },
-      { threshold: [0.55] }
-    )
+      }
+    }
 
-    observer.observe(bottomEl)
-    return () => observer.disconnect()
-  }, [])
+    window.addEventListener('scroll', onScroll, { passive: true })
+    handleScroll()
 
-  // Prevent scrolling back up when locked in bottom fold
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      if (rafId) cancelAnimationFrame(rafId)
+    }
+  }, [isLocked, reducedMotion])
+
+  // Snap transition to Screen 2
+  const triggerSnap = () => {
+    if (isSnappingRef.current || isLocked) return
+    isSnappingRef.current = true
+
+    if (reducedMotion) {
+      setIsLocked(true)
+      window.scrollTo(0, 0)
+      isSnappingRef.current = false
+      return
+    }
+
+    const startScroll = window.scrollY
+    const s2Top = screen2Ref.current ? screen2Ref.current.getBoundingClientRect().top + window.scrollY : window.innerHeight * 3
+    const targetScroll = s2Top
+    const distance = targetScroll - startScroll
+    const duration = 900
+    const startTime = performance.now()
+
+    // cubic-bezier(0.32,0.72,0,1) approximation
+    const ease = (t) => {
+      return t < 0.5
+        ? 4 * t * t * t
+        : 1 - Math.pow(-2 * t + 2, 3) / 2
+    }
+
+    const step = (now) => {
+      const elapsed = now - startTime
+      const progress = Math.min(1, elapsed / duration)
+      const eased = ease(progress)
+      window.scrollTo(0, startScroll + distance * eased)
+
+      if (progress < 1) {
+        requestAnimationFrame(step)
+      } else {
+        // ONE WAY LOCK: Unmount Screen 1 and reset scroll to 0 seamlessly
+        setIsLocked(true)
+        window.scrollTo(0, 0)
+        isSnappingRef.current = false
+      }
+    }
+
+    requestAnimationFrame(step)
+  }
+
+  // Input detection for snap (wheel, touch swipe, arrow keys)
   useEffect(() => {
-    if (!isLockedAtBottom) return
+    if (isLocked || reducedMotion) return
+
+    let touchStartY = 0
+
+    const canTriggerIntent = () => {
+      if (!isRevealCompleteRef.current || isSnappingRef.current) return false
+      // Must have rested at least 200ms at end of track
+      return performance.now() - revealCompleteTimeRef.current >= 200
+    }
 
     const handleWheel = (e) => {
-      if (e.deltaY < 0) {
-        // Prevent scrolling up past bottom fold
+      if (canTriggerIntent() && e.deltaY > 15) {
         e.preventDefault()
+        triggerSnap()
+      }
+    }
+
+    const handleTouchStart = (e) => {
+      if (e.touches && e.touches[0]) {
+        touchStartY = e.touches[0].clientY
+      }
+    }
+
+    const handleTouchMove = (e) => {
+      if (!canTriggerIntent()) return
+      if (e.touches && e.touches[0]) {
+        const deltaY = e.touches[0].clientY - touchStartY
+        if (deltaY < -25) {
+          e.preventDefault()
+          triggerSnap()
+        }
       }
     }
 
     const handleKeyDown = (e) => {
-      if (['ArrowUp', 'PageUp', 'Home'].includes(e.key)) {
+      if (!canTriggerIntent()) return
+      if (['ArrowDown', 'PageDown', 'Space', 'End'].includes(e.key)) {
         e.preventDefault()
+        triggerSnap()
       }
     }
 
     window.addEventListener('wheel', handleWheel, { passive: false })
+    window.addEventListener('touchstart', handleTouchStart, { passive: true })
+    window.addEventListener('touchmove', handleTouchMove, { passive: false })
     window.addEventListener('keydown', handleKeyDown)
 
     return () => {
       window.removeEventListener('wheel', handleWheel)
+      window.removeEventListener('touchstart', handleTouchStart)
+      window.removeEventListener('touchmove', handleTouchMove)
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [isLockedAtBottom])
+  }, [isLocked, reducedMotion])
 
-  // Geometry measurement & strict orb clearance above ticks
+  // One-way lock scroll reset and prevent upward navigation
+  useLayoutEffect(() => {
+    if (isLocked) {
+      window.scrollTo(0, 0)
+      document.documentElement.style.overflow = 'hidden'
+      document.body.style.overflow = 'hidden'
+      document.documentElement.style.overscrollBehavior = 'none'
+      document.body.style.overscrollBehavior = 'none'
+    } else {
+      document.documentElement.style.overflow = ''
+      document.body.style.overflow = ''
+      document.documentElement.style.overscrollBehavior = ''
+      document.body.style.overscrollBehavior = ''
+    }
+
+    return () => {
+      document.documentElement.style.overflow = ''
+      document.body.style.overflow = ''
+      document.documentElement.style.overscrollBehavior = ''
+      document.body.style.overscrollBehavior = ''
+    }
+  }, [isLocked])
+
+  // Ignore upward keys and gestures once locked
+  useEffect(() => {
+    if (!isLocked) return
+
+    const handleLockedWheel = (e) => {
+      e.preventDefault()
+    }
+    const handleLockedTouch = (e) => {
+      // allow horizontal or tap, but prevent vertical bounce
+    }
+    const handleLockedKeys = (e) => {
+      if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', 'Space'].includes(e.key)) {
+        e.preventDefault()
+      }
+    }
+
+    window.addEventListener('wheel', handleLockedWheel, { passive: false })
+    window.addEventListener('keydown', handleLockedKeys)
+
+    return () => {
+      window.removeEventListener('wheel', handleLockedWheel)
+      window.removeEventListener('keydown', handleLockedKeys)
+    }
+  }, [isLocked])
+
+  // Strict Exclusion Zone & Geometry Calculation for Screen 2
   useEffect(() => {
     const updateGeometry = () => {
-      const bottomEl = bottomFoldRef.current
-      if (!bottomEl) return
-
       const vw = window.innerWidth
       const vh = window.innerHeight
 
-      const heroEl = heroWrapperRef.current
       const slotEl = centerSlotRef.current
+      const headingEl = headingRef.current
+      const captionEl = captionRef.current
+      const btnEl = buttonRef.current
       const ticksEl = ticksBottomRef.current
+      const footerEl = footerRef.current
 
-      let heroRect = heroEl ? heroEl.getBoundingClientRect() : { left: vw / 2 - 160, top: vh / 2 - 160, width: 320, height: 320 }
-      let slotRect = slotEl ? slotEl.getBoundingClientRect() : { left: vw / 2 - 32, top: vh / 2 - 32, width: 64, height: 64 }
-      let ticksRect = ticksEl ? ticksEl.getBoundingClientRect() : { top: vh - 60 }
+      const getRect = (el) => {
+        if (!el) return null
+        const r = el.getBoundingClientRect()
+        return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }
+      }
 
-      const iconRadius = vw < 360 ? 18 : vw < 480 ? 22 : 26
-      const pad = vw < 360 ? 14 : vw < 480 ? 20 : 26
+      const slotR = getRect(slotEl) || { left: vw / 2 - 33, top: vh / 2 - 33, right: vw / 2 + 33, bottom: vh / 2 + 33 }
+      const headR = getRect(headingEl)
+      const capR = getRect(captionEl)
+      const btnR = getRect(btnEl)
+      const ticksR = getRect(ticksEl)
+      const footR = getRect(footerEl)
 
-      const heroCenterX = heroRect.left + heroRect.width / 2
-      const heroCenterY = heroRect.top + heroRect.height / 2
-      const slotCenterX = slotRect.left + slotRect.width / 2
-      const slotCenterY = slotRect.top + slotRect.height / 2
+      // Measured fixed nav pill
+      const navEl = document.querySelector('[aria-label="Primary navigation"]')
+      const navR = getRect(navEl) || { left: vw / 2 - 180, top: 0, right: vw / 2 + 180, bottom: 64 }
 
-      // Strict clearance: Ensure orbit NEVER dips down to the ticks level
-      const distToTicks = Math.max(140, ticksRect.top - slotCenterY)
-      const maxAllowedRadius = distToTicks - iconRadius - 28
+      let iconRadius = vw < 360 ? 16 : vw < 480 ? 20 : 26
+      let pad = vw < 640 ? 20 : 28
 
-      const preferredR = Math.max(160, Math.min(vw * 0.42, vh * 0.36, 260))
-      const R = Math.max(150, Math.min(preferredR, maxAllowedRadius))
+      // Union rectangle of heading, slot, caption, button, ticks
+      const contentRects = [slotR, headR, capR, btnR, ticksR].filter(Boolean)
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+      contentRects.forEach((r) => {
+        if (r.left < minX) minX = r.left
+        if (r.top < minY) minY = r.top
+        if (r.right > maxX) maxX = r.right
+        if (r.bottom > maxY) maxY = r.bottom
+      })
 
-      const exclusionRect = {
-        left: heroRect.left - pad,
-        top: heroRect.top - pad,
-        right: heroRect.right + pad,
-        bottom: heroRect.bottom + pad,
+      let exclusionRect = {
+        left: minX - pad,
+        top: minY - pad,
+        right: maxX + pad,
+        bottom: maxY + pad,
+      }
+
+      const slotCenterX = (slotR.left + slotR.right) / 2
+      const slotCenterY = (slotR.top + slotR.bottom) / 2
+
+      const navBottom = navR.bottom
+      const footTop = footR ? footR.top : vh - 32
+
+      const cornersOf = (rect) => [
+        { x: rect.left, y: rect.top },
+        { x: rect.right, y: rect.top },
+        { x: rect.left, y: rect.bottom },
+        { x: rect.right, y: rect.bottom },
+      ]
+
+      const maxRx = slotCenterX - (iconRadius + pad)
+      const maxRy = Math.min(
+        slotCenterY - (navBottom + iconRadius + pad),
+        footTop - slotCenterY - (iconRadius + pad)
+      )
+
+      // Find the smallest ellipse CONTAINING the exclusion zone that fits the viewport
+      const fitOrbit = (orbR, padV, rect) => {
+        const rxCap = Math.max(130, slotCenterX - (orbR + padV))
+        const ryCapTop = slotCenterY - (navBottom + orbR + padV)
+        const ryCapBottom = footTop - slotCenterY - (orbR + padV)
+        const ryCap = Math.min(ryCapTop, ryCapBottom)
+
+        const halfW = Math.max(slotCenterX - rect.left, rect.right - slotCenterX)
+        const halfH = Math.max(slotCenterY - rect.top, rect.bottom - slotCenterY)
+        if (rxCap < halfW || ryCap < halfH) return null
+
+        const corners = cornersOf(rect)
+        let needRx = halfW
+        let needRy = halfH
+        // Smallest circle containing the zone
+        let maxCornerDist = 0
+        corners.forEach((c) => {
+          maxCornerDist = Math.max(maxCornerDist, Math.hypot(c.x - slotCenterX, c.y - slotCenterY))
+        })
+        const minCircle = maxCornerDist + orbR + padV
+
+        if (minCircle <= rxCap && minCircle <= ryCap) {
+          return { rx: minCircle, ry: minCircle }
+        }
+
+        // Flatten: horizontal axis at cap, vertical axis sized so all corners stay inside the ellipse
+        needRx = rxCap
+        needRy = halfH
+        for (let i = 0; i < corners.length; i++) {
+          const cx = corners[i].x - slotCenterX
+          const cy = corners[i].y - slotCenterY
+          const t = 1 - (cx * cx) / (needRx * needRx)
+          if (t > 0.0001) {
+            needRy = Math.max(needRy, Math.abs(cy) / Math.sqrt(t))
+          } else {
+            return null
+          }
+        }
+        needRy += orbR + padV
+        if (needRy > ryCap) return null
+        return { rx: needRx, ry: needRy }
+      }
+
+      let fit = fitOrbit(iconRadius, pad, exclusionRect)
+
+      // Fallback cascade: shrink orbs to 40px (32px under 360px wide), reduce pad to 12px
+      if (!fit) {
+        iconRadius = vw < 360 ? 16 : 20
+        pad = 12
+        exclusionRect = {
+          left: minX - pad,
+          top: minY - pad,
+          right: maxX + pad,
+          bottom: maxY + pad,
+        }
+        fit = fitOrbit(iconRadius, pad, exclusionRect)
+      }
+
+      let isParked = false
+      let rx = 0
+      let ry = 0
+      const parkedPositions = {}
+
+      if (fit) {
+        rx = fit.rx
+        ry = fit.ry
+      } else {
+        // Last resort: park the three floating orbs in free space with gentle drift
+        isParked = true
+        const orbR = iconRadius
+        const bandAbove = { top: navBottom, bottom: exclusionRect.top }
+        const bandBelow = { top: exclusionRect.bottom, bottom: footTop }
+        const bandSide = { left: 0, right: exclusionRect.left, otherRight: exclusionRect.right }
+        const yAbove = (bandAbove.top + bandAbove.bottom) / 2 - slotCenterY
+        const yBelow = (bandBelow.top + bandBelow.bottom) / 2 - slotCenterY
+        const aboveOk = bandAbove.bottom - bandAbove.top >= orbR * 2 + 8
+        const belowOk = bandBelow.bottom - bandBelow.top >= orbR * 2 + 8
+        const sideW = Math.min(exclusionRect.left, vw - exclusionRect.right)
+        const sideOk = sideW >= orbR * 2 + 8
+        const yMid = 0 - (slotCenterY - (exclusionRect.top + exclusionRect.bottom) / 2)
+
+        // Distribute orbs across whichever free bands exist
+        const spots = []
+        if (aboveOk) spots.push({ x: -Math.min(90, sideW > 0 ? sideW / 2 - orbR : 90), y: yAbove })
+        if (belowOk) spots.push({ x: Math.min(90, sideW > 0 ? sideW / 2 - orbR : 90), y: yBelow })
+        if (sideOk) {
+          spots.push({ x: -(slotCenterX - exclusionRect.left) / 2 - orbR / 2, y: yMid })
+          spots.push({ x: (vw - exclusionRect.right) / 2 + orbR / 2, y: yMid })
+        }
+        while (spots.length < 3) {
+          spots.push({ x: (spots.length - 1) * 100 - 100, y: yAbove })
+        }
+
+        const floatingIds = BADGES.filter((b) => b !== stateRef.current.currentActiveId)
+        floatingIds.forEach((id, idx) => {
+          parkedPositions[id] = spots[idx % spots.length]
+        })
       }
 
       geomRef.current = {
-        heroCenterX,
-        heroCenterY,
         slotCenterX,
         slotCenterY,
-        ticksTop: ticksRect.top,
         exclusionRect,
-        rx: R,
-        ry: R,
+        rx,
+        ry,
         iconRadius,
         pad,
-        height: vh,
+        isParked,
+        parkedPositions,
+        vw,
+        vh,
       }
+
+      setOrbsParked(isParked)
 
       if (rippleRef.current) {
         rippleRef.current.setProtectedRect(exclusionRect)
@@ -286,16 +598,19 @@ export default function LandingPage() {
     window.addEventListener('resize', updateGeometry)
 
     const observer = new ResizeObserver(() => updateGeometry())
-    if (heroWrapperRef.current) observer.observe(heroWrapperRef.current)
+    if (centerSlotRef.current) observer.observe(centerSlotRef.current)
+    if (headingRef.current) observer.observe(headingRef.current)
+    if (buttonRef.current) observer.observe(buttonRef.current)
     if (ticksBottomRef.current) observer.observe(ticksBottomRef.current)
+    if (footerRef.current) observer.observe(footerRef.current)
 
     return () => {
       window.removeEventListener('resize', updateGeometry)
       observer.disconnect()
     }
-  }, [])
+  }, [isLocked])
 
-  // 60fps Animation Loop with Unified State Machine (Hold -> Brake -> Charge -> Comet -> Impact -> Settle -> Read -> Pulse -> Wake)
+  // 60fps Animation Loop with Unified State Machine  // 60fps Animation Loop with Unified State Machine
   useEffect(() => {
     if (reducedMotion) return
 
@@ -348,135 +663,86 @@ export default function LandingPage() {
       switch (state.phase) {
         case 'HOLD': {
           state.targetSpeed = baseSpeedRad
-          const timeSinceLastCycle = now - state.lastCycleEndTime
-
-          if (timeSinceLastCycle >= 3400) {
-            const currentIdx = BADGES.indexOf(state.currentActiveId)
-            const nextCandidate = BADGES[(currentIdx + 1) % BADGES.length]
-
+          const holdDuration = 4500
+          if (timeInPhase >= holdDuration) {
             const isBadgeInView = (id, margin = 20) => {
               const p = physics[id]
-              if (!p) return false
-              const sx = geom.slotCenterX + p.x
-              const sy = geom.slotCenterY + p.y
-              const r = geom.iconRadius
+              const absX = geom.slotCenterX + p.x
+              const absY = geom.slotCenterY + p.y
               return (
-                sx - r >= margin &&
-                sx + r <= window.innerWidth - margin &&
-                sy - r >= margin &&
-                sy + r <= geom.ticksTop - 12
+                absX >= margin &&
+                absX <= geom.vw - margin &&
+                absY >= margin &&
+                absY <= geom.vh - margin
               )
             }
 
             const onScreen = floatingIds.filter((id) => isBadgeInView(id))
-            let incoming = null
+            const pool = onScreen.length > 0 ? onScreen : floatingIds
+            const incoming = pool[Math.floor(Math.random() * pool.length)]
 
-            if (state.waitingIncomingId && isBadgeInView(state.waitingIncomingId)) {
-              incoming = state.waitingIncomingId
-            } else if (onScreen.includes(nextCandidate)) {
-              incoming = nextCandidate
-            } else if (onScreen.length > 0) {
-              incoming = onScreen[0]
-            } else {
-              state.waitingIncomingId = nextCandidate
-            }
-
-            if (incoming) {
-              const slotIdx = slotAssignRef.current[incoming] ?? floatingIds.indexOf(incoming)
-              const incomingAngle = (state.sharedPhase + slotIdx * ((2 * Math.PI) / 3)) % (2 * Math.PI)
-
-              const v0 = Math.max(state.currentSpeed, baseSpeedRad)
-              const brakeSec = 1.3
-              const brakeDelta = (v0 * brakeSec) / 2
-              const stopAngle = (incomingAngle + brakeDelta) % (2 * Math.PI)
-
-              state.incomingId = incoming
-              state.waitingIncomingId = null
-              state.brakeStartAngle = incomingAngle
-              state.brakeDelta = brakeDelta
-              state.brakeDuration = brakeSec * 1000
-              state.phase = 'BRAKE'
-              state.phaseStartTime = now
-            }
+            state.incomingId = incoming
+            state.phase = 'BRAKE'
+            state.phaseStartTime = now
+            state.targetSpeed = 0
           }
           break
         }
 
         case 'BRAKE': {
-          const p = Math.min(1, timeInPhase / state.brakeDuration)
-          const progress = 1 - (1 - p) * (1 - p)
-          state.sharedPhase = state.brakeStartAngle + state.brakeDelta * progress
           state.targetSpeed = 0
-          state.currentSpeed = 0
-
-          if (p >= 1) {
+          if (Math.abs(state.currentSpeed) < 0.005) {
+            state.currentSpeed = 0
             state.phase = 'CHARGE'
             state.phaseStartTime = now
-            setTextPhase('exiting')
+          }
+          break
+        }
+
+        case 'CHARGE': {
+          const chargeDuration = 700
+          if (timeInPhase >= chargeDuration) {
+            state.phase = 'COMET'
+            state.phaseStartTime = now
+
+            const incoming = state.incomingId
+            const p = physics[incoming]
+            state.cometStartX = p.x
+            state.cometStartY = p.y
+            state.cometTargetX = 0
+            state.cometTargetY = 0
+
             setExitingStageId(state.currentActiveId)
             setExitingOpacity(1.0)
           }
           break
         }
 
-        case 'CHARGE': {
-          state.targetSpeed = 0
-          state.currentSpeed = 0
-
-          if (timeInPhase >= 150) {
-            const fadeElapsed = timeInPhase - 150
-            const fadeP = Math.min(1, fadeElapsed / 500)
-            setExitingOpacity(Math.max(0.1, 1 - 0.9 * fadeP))
-          }
-
-          if (timeInPhase >= 850) {
-            const inc = state.incomingId
-            state.cometStartX = physics[inc] ? physics[inc].x : 0
-            state.cometStartY = physics[inc] ? physics[inc].y : 0
-            state.phase = 'COMET'
-            state.phaseStartTime = now
-            setTextPhase('hidden')
-          }
-          break
-        }
-
         case 'COMET': {
-          state.targetSpeed = 0
-          state.currentSpeed = 0
-
-          if (timeInPhase <= 150) {
-            setExitingOpacity(0.1 * (1 - timeInPhase / 150))
-          } else {
-            setExitingOpacity(0)
-            setExitingStageId(null)
-          }
-
-          const cometDuration = 450
+          const cometDuration = 550
           const p = Math.min(1, timeInPhase / cometDuration)
-          const easeP = Math.pow(p, 2.3)
+          const ease = p * p * (3 - 2 * p)
 
-          const incoming = state.incomingId
-          const startPX = state.cometStartX
-          const startPY = state.cometStartY
-          const currentX = startPX * (1 - easeP)
-          const currentY = startPY * (1 - easeP)
+          const currentX = state.cometStartX + (state.cometTargetX - state.cometStartX) * ease
+          const currentY = state.cometStartY + (state.cometTargetY - state.cometStartY) * ease
 
-          if (physics[incoming]) {
-            physics[incoming].x = currentX
-            physics[incoming].y = currentY
-            physics[incoming].scale = 1.15 - 0.15 * easeP
-            physics[incoming].opacity = 1.0
-          }
+          const pInc = physics[state.incomingId]
+          pInc.x = currentX
+          pInc.y = currentY
+          pInc.scale = 1.0 + 0.15 * Math.sin(p * Math.PI)
+
+          setExitingOpacity(1.0 - p)
 
           if (cometTailRef.current) {
             const tailEl = cometTailRef.current
-            tailEl.style.opacity = `${(1 - easeP * 0.4) * 0.65}`
-            const tailLen = 120 * Math.sin(p * Math.PI)
-            const moveAngle = Math.atan2(-startPY, -startPX)
-            const tailX = currentX + Math.cos(moveAngle + Math.PI) * (geom.iconRadius + 4)
-            const tailY = currentY + Math.sin(moveAngle + Math.PI) * (geom.iconRadius + 4)
-            tailEl.style.transform = `translate3d(${tailX}px, ${tailY}px, 0) rotate(${moveAngle + Math.PI}rad)`
-            tailEl.style.width = `${Math.max(0, tailLen)}px`
+            const dx = state.cometTargetX - state.cometStartX
+            const dy = state.cometTargetY - state.cometStartY
+            const angle = Math.atan2(dy, dx) * (180 / Math.PI)
+            const tailLength = Math.min(80, Math.hypot(dx, dy) * 0.45)
+
+            tailEl.style.width = `${tailLength}px`
+            tailEl.style.transform = `translate3d(${currentX}px, ${currentY}px, 0) rotate(${angle}deg)`
+            tailEl.style.opacity = `${(Math.sin(p * Math.PI) * 0.85).toFixed(2)}`
           }
 
           if (rippleRef.current && p > 0.1 && p < 0.9) {
@@ -488,25 +754,27 @@ export default function LandingPage() {
             state.phaseStartTime = now
 
             const prevActive = state.currentActiveId
-            slotAssignRef.current[prevActive] = slotAssignRef.current[incoming] ?? floatingIds.indexOf(incoming)
-            slotAssignRef.current[incoming] = null
+            const incoming = state.incomingId
             state.returningId = prevActive
-            state.returningOpacity = 0
             state.currentActiveId = incoming
+
+            slotAssignRef.current[prevActive] = slotAssignRef.current[incoming] ?? 0
+            slotAssignRef.current[incoming] = null
+
             setActiveStageId(incoming)
+            setExitingStageId(null)
+            setPulseRingActive(true)
 
             if (rippleRef.current) {
               rippleRef.current.triggerSlam(geom.slotCenterX, geom.slotCenterY, {
-                intensity: 105,
-                speed: 280,
-                width: 50,
-                maxRadius: 320,
-                blastRadius: 85,
+                intensity: 140,
+                speed: 300,
+                maxRadius: 380,
+                blastRadius: 140,
               })
               rippleRef.current.boostDamping(1200)
             }
 
-            setPulseRingActive(true)
             if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current)
             pulseTimerRef.current = setTimeout(() => setPulseRingActive(false), 550)
           }
@@ -514,7 +782,7 @@ export default function LandingPage() {
         }
 
         case 'IMPACT': {
-          if (timeInPhase >= 280) {
+          if (timeInPhase >= 80) {
             state.phase = 'SETTLE'
             state.phaseStartTime = now
             if (cometTailRef.current) {
@@ -525,50 +793,36 @@ export default function LandingPage() {
         }
 
         case 'SETTLE': {
-          state.targetSpeed = 0
-          state.currentSpeed = 0
+          const settleDuration = 800
+          const p = Math.min(1, timeInPhase / settleDuration)
+          state.returningOpacity = p
 
-          if (timeInPhase >= 250) {
-            const retP = Math.min(1, (timeInPhase - 250) / 450)
-            state.returningOpacity = 0.5 * retP
-          }
-
-          const minMet = timeInPhase >= 600
-          const maxMet = timeInPhase >= 2000
           const isCanvasSettled = rippleRef.current ? rippleRef.current.isSettled() : true
-
-          if ((minMet && isCanvasSettled) || maxMet) {
+          if (p >= 1 && (isCanvasSettled || timeInPhase >= 1400)) {
             state.phase = 'READ'
             state.phaseStartTime = now
             setTextPhase('entering')
 
-            state.readTargetCount = PLATFORM_CONFIG[state.currentActiveId].targetPercent
-            state.readCountStart = now
-            state.readCountDone = false
-            setDisplayCount(0)
+            const targetP = PLATFORM_CONFIG[state.currentActiveId].targetPercent
+            const startP = Math.max(0, targetP - 25)
+            const countDuration = 650
+            const countStart = performance.now()
+
+            const countStep = (ts) => {
+              const el = ts - countStart
+              const cp = Math.min(1, el / countDuration)
+              const easeCount = 1 - Math.pow(1 - cp, 3)
+              setDisplayCount(Math.round(startP + (targetP - startP) * easeCount))
+              if (cp < 1) requestAnimationFrame(countStep)
+            }
+            requestAnimationFrame(countStep)
           }
           break
         }
 
         case 'READ': {
-          state.targetSpeed = 0
-          state.currentSpeed = 0
-
-          if (!state.readCountDone) {
-            const countElapsed = now - state.readCountStart
-            const countP = Math.min(1, countElapsed / 1100)
-            const easeCount = 1 - Math.pow(1 - countP, 3)
-            const val = Math.round(state.readTargetCount * easeCount)
-            setDisplayCount(val)
-
-            if (countP >= 1) {
-              state.readCountDone = true
-              setDisplayCount(state.readTargetCount)
-            }
-          }
-
-          const quietDuration = 1100 + 2200
-          if (state.readCountDone && timeInPhase >= quietDuration) {
+          const readDuration = 2000
+          if (timeInPhase >= readDuration) {
             state.phase = 'PULSE'
             state.phaseStartTime = now
             setCtaShimmerCycle((c) => c + 1)
@@ -578,27 +832,19 @@ export default function LandingPage() {
         }
 
         case 'PULSE': {
-          state.targetSpeed = 0
-          state.currentSpeed = 0
-
           const pulseElapsed = now - state.phaseStartTime
-          const shimmerDuration = reducedMotion ? 1000 : 3200
-          const totalPulseDuration = shimmerDuration + 500
-
-          if (pulseElapsed >= shimmerDuration && ctaShimmerActive) {
-            setCtaShimmerActive(false)
-          }
-
-          if (pulseElapsed >= totalPulseDuration) {
+          if (pulseElapsed >= 1400) {
             setCtaShimmerActive(false)
             state.phase = 'WAKE'
             state.phaseStartTime = now
+            state.cycleCount += 1
           }
           break
         }
 
         case 'WAKE': {
-          const wakeP = Math.min(1, timeInPhase / 2200)
+          const wakeDuration = 2200
+          const wakeP = Math.min(1, timeInPhase / wakeDuration)
           const easeWake = 0.5 - 0.5 * Math.cos(wakeP * Math.PI)
           state.targetSpeed = baseSpeedRad * easeWake
 
@@ -623,13 +869,21 @@ export default function LandingPage() {
         if (state.phase === 'COMET' && id === state.incomingId) return
 
         const p = physics[id]
+        if (geom.isParked && geom.parkedPositions[id]) {
+          const park = geom.parkedPositions[id]
+          const dCfg = DRIFT_CONFIG[id]
+          p.x = park.x + 5 * Math.sin(tSec / dCfg.T1 + dCfg.phi1)
+          p.y = park.y + 4 * Math.sin(tSec / dCfg.T2 + dCfg.phi2)
+          return
+        }
+
         const slotIdx = slotAssignRef.current[id] ?? 0
         const slotAngle = (state.sharedPhase + slotIdx * ((2 * Math.PI) / 3)) % (2 * Math.PI)
         const sq = getCirclePoint(slotAngle, geom.rx, geom.ry)
 
         const dCfg = DRIFT_CONFIG[id]
-        const rDrift = 6 * Math.sin(tSec / dCfg.T1 + dCfg.phi1) * driftScale
-        const tDrift = 4 * Math.sin(tSec / dCfg.T2 + dCfg.phi2) * driftScale
+        const rDrift = 5 * Math.sin(tSec / dCfg.T1 + dCfg.phi1) * driftScale
+        const tDrift = 3 * Math.sin(tSec / dCfg.T2 + dCfg.phi2) * driftScale
 
         const invLen = 1 / (Math.sqrt(sq.x * sq.x + sq.y * sq.y) || 1)
         const radDirX = sq.x * invLen
@@ -640,15 +894,77 @@ export default function LandingPage() {
         let nextX = sq.x + radDirX * rDrift + tanDirX * tDrift
         let nextY = sq.y + radDirY * rDrift + tanDirY * tDrift
 
-        // Strict avoidance of ticks area: never allow orb Y to cross into ticks
-        const maxAllowedY = geom.ticksTop - geom.slotCenterY - geom.iconRadius - 16
-        if (nextY > maxAllowedY) {
-          nextY = maxAllowedY
+        // Exclusion always wins: clamp orb outside the zone (nearest edge push-out)
+        {
+          const ex = geom.exclusionRect
+          let absX = geom.slotCenterX + nextX
+          let absY = geom.slotCenterY + nextY
+          if (
+            absX + geom.iconRadius > ex.left &&
+            absX - geom.iconRadius < ex.right &&
+            absY + geom.iconRadius > ex.top &&
+            absY - geom.iconRadius < ex.bottom
+          ) {
+            const distLeft = absX + geom.iconRadius - ex.left
+            const distRight = ex.right - (absX - geom.iconRadius)
+            const distTop = absY + geom.iconRadius - ex.top
+            const distBottom = ex.bottom - (absY - geom.iconRadius)
+            const minDist = Math.min(distLeft, distRight, distTop, distBottom)
+            if (minDist === distLeft) absX = ex.left - geom.iconRadius
+            else if (minDist === distRight) absX = ex.right + geom.iconRadius
+            else if (minDist === distTop) absY = ex.top - geom.iconRadius
+            else absY = ex.bottom + geom.iconRadius
+          }
+          nextX = absX - geom.slotCenterX
+          nextY = absY - geom.slotCenterY
         }
 
         p.x = nextX
         p.y = nextY
       })
+
+      // Soft spring separation: ensure minimum 2 orb diameters between floating orbs
+      const minOrbDist = geom.iconRadius * 4
+      for (let i = 0; i < floatingIds.length; i++) {
+        for (let j = i + 1; j < floatingIds.length; j++) {
+          const idA = floatingIds[i]
+          const idB = floatingIds[j]
+          const pA = physics[idA]
+          const pB = physics[idB]
+          const dx = pB.x - pA.x
+          const dy = pB.y - pA.y
+          const dist = Math.hypot(dx, dy)
+          if (dist < minOrbDist && dist > 0.1) {
+            const overlap = (minOrbDist - dist) * 0.5
+            const nx = dx / dist
+            const ny = dy / dist
+            pA.x -= nx * overlap
+            pA.y -= ny * overlap
+            pB.x += nx * overlap
+            pB.y += ny * overlap
+          }
+        }
+      }
+
+      // Dev check (DEV only): verify no exclusion zone intersections across cycles
+      if (import.meta.env.DEV && state.cycleCount <= 2) {
+        floatingIds.forEach((id) => {
+          if (state.phase === 'COMET' && id === state.incomingId) return
+          const p = physics[id]
+          const absX = geom.slotCenterX + p.x
+          const absY = geom.slotCenterY + p.y
+          const r = geom.iconRadius
+          const ex = geom.exclusionRect
+          if (
+            absX + r > ex.left &&
+            absX - r < ex.right &&
+            absY + r > ex.top &&
+            absY - r < ex.bottom
+          ) {
+            console.warn(`[DEV CHECK] Orb ${id} intersected exclusion zone at (${absX}, ${absY})`)
+          }
+        })
+      }
 
       const isDimmed = state.phase === 'CHARGE' || state.phase === 'COMET' || state.phase === 'IMPACT' || state.phase === 'SETTLE' || state.phase === 'READ' || state.phase === 'PULSE'
       const targetFloatingOpacity = isDimmed ? 0.45 : 0.85
@@ -689,17 +1005,10 @@ export default function LandingPage() {
         p.opacity += (op - p.opacity) * 0.15
         p.scale += (sc - p.scale) * 0.15
 
-        // Smooth bottom falloff as orbs approach ticks threshold
-        const absY = geom.slotCenterY + p.y
-        const distFromTicks = geom.ticksTop - absY
-        const fadeMargin = 120
-        const bottomFactor = Math.min(1, Math.max(0, distFromTicks / fadeMargin))
-        const effectiveOpacity = p.opacity * bottomFactor
-
         el.style.transform = `translate3d(${p.x}px, ${p.y}px, 0) scale(${p.scale})`
-        el.style.opacity = `${effectiveOpacity.toFixed(3)}`
+        el.style.opacity = `${p.opacity.toFixed(3)}`
 
-        if (effectiveOpacity > 0.08) {
+        if (p.opacity > 0.08) {
           hoverLights.push({
             x: geom.slotCenterX + p.x,
             y: geom.slotCenterY + p.y,
@@ -724,116 +1033,73 @@ export default function LandingPage() {
   const activeConfig = activeStageId ? PLATFORM_CONFIG[activeStageId] : null
   const exitingConfig = exitingStageId ? PLATFORM_CONFIG[exitingStageId] : null
 
-  const scrollToBottomFold = () => {
-    bottomFoldRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
-
   return (
     <div
-      ref={containerRef}
-      className="relative w-full min-h-screen bg-[#0a0a0a] text-white selection:bg-white/20 font-sans snap-y snap-mandatory overflow-x-hidden"
+      className="relative w-full min-h-screen bg-[#000000] text-white selection:bg-white/20 font-sans overflow-x-hidden"
     >
-      {/* ── FOLD 1: INTRO HERO ── */}
-      <section
-        ref={topFoldRef}
-        className="relative w-full min-h-[100svh] snap-start flex flex-col justify-between items-center px-6 py-8 bg-[#0a0a0a]"
-      >
-        {/* Navigation bar */}
-        <header className="w-full max-w-6xl mx-auto flex items-center justify-between z-20">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-slate-950 font-bold shadow-md">
-              <TrendingUp size={16} />
+      <FloatingIslandNav />
+
+      {/* ── SCREEN 1: SCROLL-DRIVEN REVEAL (Unmounted when locked) ── */}
+      {!isLocked && (
+        <section
+          ref={screen1TrackRef}
+          className="relative w-full h-[300svh] bg-[#000000]"
+        >
+          <div className="sticky top-0 h-[100svh] w-full flex flex-col items-center justify-center px-6 text-center select-none">
+            <div className="max-w-[680px] mx-auto flex flex-col items-center">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight leading-tight [text-wrap:balance]">
+                {REVEAL_WORDS.map((word, index) => {
+                  const isRevealed = reducedMotion || index < revealedCount
+                  return (
+                    <span
+                      key={`${word}-${index}`}
+                      className={`inline-block mr-2.5 transition-colors duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+                        isRevealed ? 'text-white' : 'text-white/25'
+                      }`}
+                    >
+                      {word}
+                    </span>
+                  )
+                })}
+              </h1>
+
+              {/* Actions below text: fade in only when last word is lit */}
+              <div
+                className={`mt-10 flex flex-col items-center gap-4 transition-opacity duration-500 ${
+                  actionsVisible || reducedMotion ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+                }`}
+              >
+                <Link
+                  to="/auth"
+                  className="inline-flex items-center justify-center px-8 py-3.5 rounded-xl bg-white text-slate-950 font-semibold text-base shadow-[0_0_30px_rgba(255,255,255,0.25)] hover:bg-slate-100 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 select-none"
+                >
+                  Find your dream job
+                  <ArrowRight className="ml-2 w-4 h-4" />
+                </Link>
+
+                <div className="text-sm text-slate-400">
+                  <span>Already have an account? </span>
+                  <Link
+                    to="/auth?mode=signin"
+                    className="font-medium text-slate-200 hover:text-white underline underline-offset-4 decoration-slate-600 hover:decoration-slate-300 transition-colors"
+                  >
+                    Sign in
+                  </Link>
+                </div>
+              </div>
             </div>
-            <span className="font-bold text-white text-base tracking-tight">Career Sync</span>
           </div>
+        </section>
+      )}
 
-          <div className="flex items-center gap-3">
-            <Link
-              to="/about"
-              className="text-sm text-slate-300 hover:text-white transition-colors font-medium px-3.5 py-1.5 rounded-lg hover:bg-white/5"
-            >
-              About
-            </Link>
-            <Link
-              to="/auth?mode=signin"
-              className="text-sm text-white font-medium px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 transition-colors border border-white/10"
-            >
-              Sign In
-            </Link>
-          </div>
-        </header>
-
-        {/* Center content */}
-        <div className="my-auto max-w-3xl mx-auto text-center flex flex-col items-center z-10 pt-8 pb-4">
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-white mb-6 leading-tight [text-wrap:balance]">
-            Stop sending static resumes
-          </h1>
-
-          {/* Styled gaining opacity & highlighting text */}
-          <p className="text-lg sm:text-xl md:text-2xl text-slate-300 font-medium leading-relaxed max-w-2xl mb-10 [text-wrap:pretty]">
-            <span className="text-white font-semibold drop-shadow-sm">Traditional resumes hide your true ability.</span>{' '}
-            <span className="text-slate-300">Find your dream jobs easily and match careers that fit your skills.</span>
-          </p>
-
-          {/* Primary CTA */}
-          <div className="flex flex-col sm:flex-row items-center gap-4">
-            <Link
-              to="/auth?mode=signup"
-              className="inline-flex items-center justify-center px-8 py-3.5 rounded-xl bg-white text-slate-950 font-semibold text-base shadow-[0_0_30px_rgba(255,255,255,0.25)] hover:bg-slate-100 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 select-none"
-            >
-              Find your dream job
-              <ArrowRight className="ml-2 w-4 h-4" />
-            </Link>
-          </div>
-
-          {/* Secondary Sign In */}
-          <div className="mt-4 text-sm text-slate-400">
-            <span>Already have an account? </span>
-            <Link
-              to="/auth?mode=signin"
-              className="font-medium text-slate-200 hover:text-white underline underline-offset-4 decoration-slate-600 hover:decoration-slate-300 transition-colors"
-            >
-              Sign in
-            </Link>
-          </div>
-        </div>
-
-        {/* Bottom ticks & scroll trigger */}
-        <div className="w-full flex flex-col items-center gap-6 pb-4 z-10">
-          <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 text-xs text-slate-400 select-none">
-            <span className="flex items-center gap-1.5">
-              <Check className="w-4 h-4 text-emerald-400" />
-              No credit card required
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Check className="w-4 h-4 text-emerald-400" />
-              Syncs in 30 seconds
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Check className="w-4 h-4 text-emerald-400" />
-              Cancel or delete anytime
-            </span>
-          </div>
-
-          <button
-            type="button"
-            onClick={scrollToBottomFold}
-            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer group mt-2"
-          >
-            <span>Scroll down to interactive preview</span>
-            <ChevronDown className="w-4 h-4 transition-transform group-hover:translate-y-0.5 animate-bounce" />
-          </button>
-        </div>
-      </section>
-
-      {/* ── FOLD 2: BOTTOM INTERACTIVE FOLD (Grid + Water Ripple + Smashed Orbs) ── */}
+      {/* ── SCREEN 2: THE ORBIT STAGE (Final fold) ── */}
       <section
-        ref={bottomFoldRef}
-        className="relative w-full min-h-[100svh] h-[100dvh] snap-start overflow-hidden bg-[#0a0a0a] bg-[radial-gradient(rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:24px_24px] text-white flex flex-col items-center justify-between select-none font-sans py-6 px-4"
+        ref={screen2Ref}
+        className="relative w-full h-[100svh] overflow-hidden bg-[#0a0a0a] bg-[radial-gradient(rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:24px_24px] text-white flex flex-col items-center justify-between select-none font-sans py-6 px-4"
       >
         <WaterRippleCanvas ref={rippleRef} className="absolute inset-0 z-0 pointer-events-auto" />
 
-        {/* Interactive Comet Tail Streak */}
+        {/* Comet streak and floating orbit orbs */}
         <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
           <div
             ref={cometTailRef}
@@ -849,7 +1115,6 @@ export default function LandingPage() {
             }}
           />
 
-          {/* Floating Orbit Orbs */}
           {!reducedMotion &&
             BADGES.map((id) => {
               const cfg = PLATFORM_CONFIG[id]
@@ -883,23 +1148,22 @@ export default function LandingPage() {
             })}
         </div>
 
-        {/* Top spacer / subtle headline */}
-        <div className="relative z-20 text-center max-w-md pt-2 pointer-events-none">
-          <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white/90">
-            Prove your real craft
-          </h2>
-          <p className="text-xs text-slate-400 mt-1">
-            Automated verification replaces guesswork with live telemetry
-          </p>
-        </div>
+        {/* Top spacer for floating nav */}
+        <div className="h-14 w-full pointer-events-none" />
 
-        {/* Center Slot & Smash Impact Area */}
+        {/* Center Stage & Content */}
         <div
           ref={heroWrapperRef}
           className="relative z-20 flex flex-col items-center text-center max-w-sm px-4 pointer-events-auto my-auto"
         >
+          <h1
+            ref={headingRef}
+            className="text-[clamp(28px,6vmin,54px)] font-extrabold tracking-tight text-white leading-tight drop-shadow-md"
+          >
+            Do you have
+          </h1>
+
           <div ref={centerSlotRef} className="h-20 w-20 my-2 flex items-center justify-center relative">
-            {/* Slot landing pulse ring */}
             {pulseRingActive && (
               <div
                 aria-hidden="true"
@@ -907,7 +1171,6 @@ export default function LandingPage() {
               />
             )}
 
-            {/* Outgoing center icon fading in-place */}
             {exitingConfig && (
               <div
                 style={{
@@ -920,7 +1183,6 @@ export default function LandingPage() {
               </div>
             )}
 
-            {/* Active Center Icon with calibrated colored orb glow */}
             {activeConfig ? (
               <div
                 style={{
@@ -935,8 +1197,11 @@ export default function LandingPage() {
             )}
           </div>
 
-          {/* Text Area: Verified stats readout */}
-          <div aria-live="polite" className="h-14 flex flex-col items-center justify-center overflow-visible">
+          <div
+            ref={captionRef}
+            aria-live="polite"
+            className="h-14 flex flex-col items-center justify-center overflow-visible"
+          >
             {activeConfig && textPhase !== 'hidden' ? (
               <div
                 className={`flex flex-col items-center will-change-transform ${
@@ -969,71 +1234,79 @@ export default function LandingPage() {
               <div className="h-8" />
             )}
           </div>
-        </div>
 
-        {/* Bottom CTA & Trust Ticks (Orbs strictly stay ABOVE this container) */}
-        <div
-          ref={ticksBottomRef}
-          className="relative z-30 flex flex-col items-center pb-4 pt-2 pointer-events-auto w-full max-w-md"
-        >
-          {/* Main CTA */}
-          <Link
-            ref={buttonRef}
-            to="/auth?mode=signup"
-            className="relative overflow-hidden inline-flex items-center justify-center min-w-[200px] min-h-[48px] px-8 py-3.5 rounded-xl bg-white text-slate-950 font-bold text-base shadow-[0_0_24px_rgba(255,255,255,0.2)] active:scale-[0.98] transition-all duration-200 hover:bg-slate-100 touch-manipulation select-none"
-          >
-            <span className="grid grid-cols-1 grid-rows-1 items-center justify-center text-center [&>*]:col-start-1 [&>*]:row-start-1">
-              <span
-                className={`font-bold text-base tracking-normal select-none ${
-                  reducedMotion && ctaShimmerActive
-                    ? 'animate-cta-reduced-color'
-                    : 'text-slate-950 opacity-100'
-                }`}
-              >
-                Get a job you'll love
-              </span>
-
-              {!reducedMotion && (
+          {/* Button directly under caption */}
+          <div className="mt-4 flex flex-col items-center">
+            <Link
+              ref={buttonRef}
+              to="/auth"
+              className="relative overflow-hidden inline-flex items-center justify-center min-w-[200px] min-h-[48px] px-8 py-3.5 rounded-xl bg-white text-slate-950 font-bold text-base shadow-[0_0_24px_rgba(255,255,255,0.2)] active:scale-[0.98] transition-all duration-200 hover:bg-slate-100 touch-manipulation select-none"
+            >
+              <span className="grid grid-cols-1 grid-rows-1 items-center justify-center text-center [&>*]:col-start-1 [&>*]:row-start-1">
                 <span
-                  key={ctaShimmerCycle}
-                  aria-hidden="true"
-                  className={`font-bold text-base tracking-normal pointer-events-none select-none cta-text-shimmer ${
-                    ctaShimmerActive ? 'cta-text-shimmer-active' : ''
+                  className={`font-bold text-base tracking-normal select-none ${
+                    reducedMotion && ctaShimmerActive
+                      ? 'animate-cta-reduced-color'
+                      : 'text-slate-950 opacity-100'
                   }`}
                 >
                   Get a job you'll love
                 </span>
-              )}
-            </span>
-          </Link>
 
-          {/* Secondary Sign In */}
-          <div className="mt-3 flex items-center justify-center gap-1.5 text-xs text-slate-400">
-            <span>Already have an account?</span>
-            <Link
-              to="/auth?mode=signin"
-              className="font-medium text-slate-200 hover:text-white underline underline-offset-4 decoration-slate-600 hover:decoration-slate-300 transition-colors"
-            >
-              Sign in
+                {!reducedMotion && (
+                  <span
+                    key={ctaShimmerCycle}
+                    aria-hidden="true"
+                    className={`font-bold text-base tracking-normal pointer-events-none select-none cta-text-shimmer ${
+                      ctaShimmerActive ? 'cta-text-shimmer-active' : ''
+                    }`}
+                  >
+                    Get a job you'll love
+                  </span>
+                )}
+              </span>
             </Link>
-          </div>
 
-          {/* Bottom ticks: Guaranteed no orb overlap */}
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-4 text-[11px] text-slate-400 select-none">
-            <span className="flex items-center gap-1.5">
-              <Check className="w-3.5 h-3.5 text-emerald-400" />
-              No credit card required
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Check className="w-3.5 h-3.5 text-emerald-400" />
-              Syncs in 30 seconds
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Check className="w-3.5 h-3.5 text-emerald-400" />
-              Cancel or delete anytime
-            </span>
+            {/* Three ticks directly below button */}
+            <div
+              ref={ticksBottomRef}
+              className={`mt-4 flex ${orbsParked ? 'flex-col' : 'flex-wrap'} items-center justify-center gap-4 text-[11px] text-slate-400 select-none`}
+            >
+              <span className="flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                No credit card required
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                Syncs in 30 seconds
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                Cancel or delete anytime
+              </span>
+            </div>
           </div>
         </div>
+
+        {/* Minimal Footer Line at the very bottom */}
+        <footer
+          ref={footerRef}
+          className="relative z-30 w-full max-w-4xl flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[11px] text-slate-500 pb-2 pt-2"
+        >
+          <Link to="/info" className="hover:text-slate-300 transition-colors">
+            Why CareerSync
+          </Link>
+          <Link to="/about" className="hover:text-slate-300 transition-colors">
+            About
+          </Link>
+          <Link to="/info" className="hover:text-slate-300 transition-colors">
+            Privacy policy
+          </Link>
+          <Link to="/info" className="hover:text-slate-300 transition-colors">
+            Terms of service
+          </Link>
+          <span>© {new Date().getFullYear()} CareerSync</span>
+        </footer>
       </section>
     </div>
   )

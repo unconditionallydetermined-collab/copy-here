@@ -8,6 +8,7 @@ import logger from './services/logger'
 
 import LandingPage   from './pages/LandingPage'
 import AboutPage     from './pages/AboutPage'
+import InfoPage      from './pages/InfoPage'
 import AuthPage      from './pages/AuthPage'
 import Dashboard     from './pages/Dashboard'
 import ProfilePage   from './pages/ProfilePage'
