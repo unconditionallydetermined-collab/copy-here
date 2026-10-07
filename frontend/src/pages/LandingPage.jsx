@@ -53,20 +53,6 @@ export default function LandingPage() {
   const [displayCount, setDisplayCount] = useState(PLATFORM_CONFIG.github.targetPercent)
   const [reducedMotion, setReducedMotion] = useState(false)
   const [badgeRadius, setBadgeRadius] = useState(240)
-  const [showLogs, setShowLogs] = useState(false)
-  const [logCount, setLogCount] = useState(0)
-  const [liveCoords, setLiveCoords] = useState({})
-  const logsRef = useRef([])
-  const pageStartTimeRef = useRef(performance.now())
-
-  const addLog = (type, details) => {
-    const elapsed = Math.round(performance.now() - pageStartTimeRef.current)
-    const entry = `[+${elapsed}ms] [${type}] ${typeof details === 'object' ? JSON.stringify(details) : details}`
-    logsRef.current.push(entry)
-    // Keep last 1500 log entries
-    if (logsRef.current.length > 1500) logsRef.current.shift()
-    setLogCount(logsRef.current.length)
-  }
 
   const rippleRef = useRef(null)
   const centerSlotRef = useRef(null)
@@ -110,7 +96,6 @@ export default function LandingPage() {
       const vh = window.innerHeight
       const r = Math.max(200, Math.min(vw * 0.44, vh * 0.40, 280))
       setBadgeRadius(r)
-      addLog('VIEWPORT_INIT', { vw, vh, badgeRadius: r })
     }
     calcRadius()
     window.addEventListener('resize', calcRadius)
@@ -141,7 +126,6 @@ export default function LandingPage() {
               orbiting: orbitingRef.current[id]
             }
           })
-          addLog('COORDS_TICK', { active: activeStageIdRef.current, candidate: incomingCandidateRef.current, sample })
           setLiveCoords(sample)
         }
         const angles = anglesRef.current
@@ -168,7 +152,6 @@ export default function LandingPage() {
               if (distToApex <= 1.2 || (prevDeg > 358 && prevDeg < 360) || nextDeg < 1.0) {
                 angles[id] = 0
                 pausedAtApexRef.current = id
-                addLog('APEX_ARRIVAL', { id, prevDeg: Math.round(prevDeg), x: 0, y: -badgeRadius })
                 setPoweringId(id)
                 return
               }
@@ -284,11 +267,8 @@ export default function LandingPage() {
     // 1. As powerup loads, dim glow under other orbs so focus snaps to apex
     glowDimRef.current = 0.15
 
-    addLog('POWERUP_START', { id: poweringId, y: -badgeRadius })
-
     // 2. While asteroid is about to strike, get rid of text below with S-curve exit
     const textExitTimer = setTimeout(() => {
-      addLog('TEXT_EXIT_START', { phase: 'exiting' })
       setTextPhase('exiting')
     }, 400)
 
@@ -305,7 +285,6 @@ export default function LandingPage() {
         startY: -badgeRadius,
         startTime: performance.now(),
       }
-      addLog('STRIKE_LAUNCH', { id: launchingId, startX: 0, startY: -badgeRadius })
 
       // 4. Exact moment of impact (360ms plunge)
       setTimeout(() => {
@@ -337,7 +316,6 @@ export default function LandingPage() {
             intensity: 320,
             blastRadius: 120,
           })
-          addLog('SLAM_IMPACT', { id: launchingId, cx: Math.round(cx), cy: Math.round(cy), intensity: 320 })
         }
 
         // Keep text hidden while ripples settle; fade in once dust settles (700ms later)
@@ -368,7 +346,6 @@ export default function LandingPage() {
               const btnX = btnRect.left + btnRect.width / 2
               const btnY = btnRect.top + btnRect.height / 2
               rippleRef.current.streamGlowToTarget(btnX, btnY)
-              addLog('CTA_GLOW_STREAM', { btnX: Math.round(btnX), btnY: Math.round(btnY) })
             }
 
             // 3 seconds after glow returns, button does AI thinking text simmer

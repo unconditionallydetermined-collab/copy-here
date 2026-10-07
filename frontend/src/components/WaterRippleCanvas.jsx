@@ -334,24 +334,25 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
 
         let energy = Math.min(1, disp / 6)
 
-        if (dimFactor > 0.01) {
+        if (dimFactor > 0.01 && lights.length > 0) {
           for (let l = 0; l < lights.length; l++) {
             const light = lights[l]
-            // Only emit dynamic glow & wake disturbance when moving
             if (!light.moving) continue
 
             const lx = light.x - dot.ox
+            if (Math.abs(lx) > LIGHT_RADIUS) continue
             const ly = light.y - dot.oy
+            if (Math.abs(ly) > LIGHT_RADIUS) continue
+
             const lDistSq = lx * lx + ly * ly
             if (lDistSq < LIGHT_RADIUS_SQ) {
               const dist = Math.sqrt(lDistSq)
               const lFactor = (1 - dist / LIGHT_RADIUS) * dimFactor
               energy = Math.max(energy, lFactor * 1.8)
 
-              // Tapered wake disturbance
-              if (dist < 32 && dist > 2) {
-                dot.vx += (lx / dist) * 22 * dt
-                dot.vy += (ly / dist) * 22 * dt
+              if (dist < 30 && dist > 2) {
+                dot.vx += (lx / dist) * 18 * dt
+                dot.vy += (ly / dist) * 18 * dt
               }
             }
           }
