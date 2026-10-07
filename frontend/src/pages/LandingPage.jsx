@@ -711,11 +711,19 @@ export default function LandingPage() {
         p.opacity += (op - p.opacity) * 0.15
         p.scale += (sc - p.scale) * 0.15
 
-        el.style.transform = `translate3d(${p.x}px, ${p.y}px, 0) scale(${p.scale})`
-        el.style.opacity = `${p.opacity}`
+        // Bottom edge gradient: orbs smoothly lose opacity as they fly into the bottom zone
+        const screenY = heroCY + p.y
+        const distFromBottom = geom.height - screenY
+        const BOTTOM_FADE_MARGIN = Math.max(220, Math.min(320, geom.height * 0.3))
+        const bottomFactor = Math.min(1, Math.max(0, distFromBottom / BOTTOM_FADE_MARGIN))
+        const bottomGradient = 0.5 - 0.5 * Math.cos(bottomFactor * Math.PI)
+        const effectiveOpacity = p.opacity * bottomGradient
 
-        // Hover lights on water ripple canvas
-        if (p.opacity > 0.1) {
+        el.style.transform = `translate3d(${p.x}px, ${p.y}px, 0) scale(${p.scale})`
+        el.style.opacity = `${effectiveOpacity.toFixed(3)}`
+
+        // Hover lights on water ripple canvas scale with effective opacity
+        if (effectiveOpacity > 0.08) {
           hoverLights.push({
             x: heroCX + p.x,
             y: heroCY + p.y,

@@ -315,7 +315,7 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
       // 30% larger glow radius under orbs (17 -> 22px)
       const ACTIVE_ORB_LIGHT_RADIUS = 48
       const ACTIVE_ORB_LIGHT_RADIUS_SQ = ACTIVE_ORB_LIGHT_RADIUS * ACTIVE_ORB_LIGHT_RADIUS
-      const EDGE_FADE_MARGIN = 140
+      // Bottom fade margin calibrated dynamically
 
       for (let i = 0; i < dots.length; i++) {
         const dot = dots[i]
@@ -366,24 +366,21 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
           }
         }
 
-        // Edge vignette: smooth brightness falloff near screen borders
-        const distFromLeft = dot.ox
-        const distFromRight = width - dot.ox
-        const distFromTop = dot.oy
+        // Bottom edge gradient: smooth fade out towards the bottom edge only
         const distFromBottom = height - dot.oy
-        const minEdgeDist = Math.min(distFromLeft, distFromRight, distFromTop, distFromBottom)
-        const edgeFactor = Math.min(1, Math.max(0.06, minEdgeDist / EDGE_FADE_MARGIN))
-        const easedEdge = 0.5 - 0.5 * Math.cos(edgeFactor * Math.PI)
+        const BOTTOM_FADE_MARGIN = Math.max(220, Math.min(320, height * 0.3))
+        const bottomFactor = Math.min(1, Math.max(0, distFromBottom / BOTTOM_FADE_MARGIN))
+        const bottomGradient = 0.5 - 0.5 * Math.cos(bottomFactor * Math.PI)
 
-        // Dynamic radius and luminous fluid particle coloring with edge attenuation
+        // Dynamic radius and luminous fluid particle coloring with bottom gradient attenuation
         const baseAlpha = Math.min(0.92, 0.40 + 0.52 * energy)
-        const alpha = baseAlpha * easedEdge
-        const radius = (BASE_DOT_RADIUS + 0.85 * energy) * Math.max(0.7, easedEdge)
+        const alpha = baseAlpha * bottomGradient
+        const radius = (BASE_DOT_RADIUS + 0.85 * energy) * Math.max(0.65, bottomGradient)
 
         ctx.fillStyle =
           energy > 0.06
             ? `rgba(${Math.round(215 + 40 * energy)}, ${Math.round(225 + 30 * energy)}, 255, ${alpha.toFixed(3)})`
-            : `rgba(185, 195, 210, ${(0.38 * easedEdge).toFixed(3)})`
+            : `rgba(185, 195, 210, ${(0.38 * bottomGradient).toFixed(3)})`
 
         ctx.beginPath()
         ctx.arc(dot.x, dot.y, radius, 0, Math.PI * 2)
