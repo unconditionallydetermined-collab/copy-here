@@ -60,16 +60,15 @@ export default function LandingPage() {
 
   const activeStageIdRef = useRef('github')
   const incomingCandidateRef = useRef('leetcode')
-  const pausedOrbitAngleRef = useRef(null)
-  const pausedOrbRef = useRef(null)
+  const pausedAtApexRef = useRef(null)
   const glowDimRef = useRef(1.0)
-  const strikeProgressRef = useRef(null) // null or { id, startY, currentY, startTime }
+  const strikeProgressRef = useRef(null) // { id, startX, startY, startTime }
 
   const anglesRef = useRef({
     github: 0,
-    leetcode: 90,
-    linkedin: 180,
-    skills: 270,
+    leetcode: 120,
+    linkedin: 240,
+    skills: 0,
   })
 
   const orbitingRef = useRef({
@@ -117,36 +116,25 @@ export default function LandingPage() {
         const activeOrbiters = BADGES.filter((id) => orbitingRef.current[id])
         const candidate = incomingCandidateRef.current
 
-        // Stop candidate right where it currently is in orbit and trigger powerup
-        if (candidate && orbitingRef.current[candidate] && !pausedOrbRef.current && !strikeProgressRef.current) {
-          pausedOrbRef.current = candidate
-          pausedOrbitAngleRef.current = angles[candidate]
-          setPoweringId(candidate)
-        }
+        const isPaused = Boolean(pausedAtApexRef.current || strikeProgressRef.current)
 
-        // Advance orbiting icons with spring elasticity to prevent overlapping
-        activeOrbiters.forEach((id) => {
-          if (pausedOrbRef.current === id) {
-            return
-          }
+        // Advance orbiting icons smoothly
+        if (!isPaused) {
+          activeOrbiters.forEach((id) => {
+            const prevDeg = angles[id]
+            const nextDeg = (prevDeg + baseSpeed * delta) % 360
+            angles[id] = nextDeg
 
-          let speedFactor = 1.0
-          const myDeg = angles[id] % 360
-
-          activeOrbiters.forEach((otherId) => {
-            if (otherId === id) return
-            const otherDeg = angles[otherId] % 360
-            let gap = (otherDeg - myDeg + 360) % 360
-
-            const MIN_SAFE_GAP = 90
-            if (gap > 0 && gap < MIN_SAFE_GAP) {
-              const elasticity = Math.max(0.35, gap / MIN_SAFE_GAP)
-              speedFactor = Math.min(speedFactor, elasticity)
+            // Check if candidate naturally arrived at apex (top of circle, above "Do you have")
+            if (candidate === id && !pausedAtApexRef.current && !strikeProgressRef.current) {
+              if ((prevDeg > 350 && nextDeg < 15) || (nextDeg >= 356 || nextDeg <= 4)) {
+                angles[id] = 0 // Top apex: x=0, y=-badgeRadius
+                pausedAtApexRef.current = id
+                setPoweringId(id)
+              }
             }
           })
-
-          angles[id] = (angles[id] + baseSpeed * speedFactor * delta) % 360
-        })
+        }
 
         // Position orbit elements in DOM
         const centerX = window.innerWidth / 2
@@ -261,6 +249,7 @@ export default function LandingPage() {
 
       strikeProgressRef.current = {
         id: launchingId,
+        startX: 0,
         startY: -badgeRadius,
         startTime: performance.now(),
       }
@@ -277,11 +266,11 @@ export default function LandingPage() {
         setActiveStageId(launchingId) // Replaces center icon
         incomingCandidateRef.current = null
 
-        // Return previous icon smoothly into orbit queue with even spacing
+        // Return previous icon smoothly into orbit queue at apex and resume
         setTimeout(() => {
           orbitingRef.current[prevActive] = true
-          const otherAngles = BADGES.filter(id => id !== prevActive && orbitingRef.current[id]).map(id => anglesRef.current[id])
-          anglesRef.current[prevActive] = (Math.max(...otherAngles, 0) + 120) % 360
+          anglesRef.current[prevActive] = 0
+          pausedAtApexRef.current = null
           setExitingStageId(null)
         }, 350)
 
