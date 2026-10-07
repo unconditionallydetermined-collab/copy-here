@@ -7,7 +7,8 @@ export default function SplashTransition() {
     let frame = 0
     const setFocus = () => {
       const target = document.querySelector('[data-attention="Attention"]')
-        || document.querySelector('main h1, h1, [data-page-focus]')
+        || document.querySelector('[data-onboarding-root] h1')
+        || document.querySelector('[data-page-focus], main h1, h1')
       if (!target) return
       const rect = target.getBoundingClientRect()
       const x = rect.left + rect.width / 2
