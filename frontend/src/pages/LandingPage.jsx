@@ -127,6 +127,8 @@ export default function LandingPage() {
     pulseStage: 0, // 0 = not started, 1 = pulse 1, 2 = gap, 3 = pulse 2
     pulseStartTime: 0,
     waitingIncomingId: null,
+    cometStartX: 0,
+    cometStartY: 0,
   })
 
   // Persistent orbit slot per badge (0..2). A badge keeps its slot for its
@@ -353,8 +355,8 @@ export default function LandingPage() {
               const brakeDelta = (v0 * brakeSec) / 2
               const stopAngle = (incomingAngle + brakeDelta) % (2 * Math.PI)
 
-              // Verify the stopping position is also inside the viewing zone
-              if (isAngleInViewingZone(stopAngle) || onScreenBadges.length <= 1) {
+              // Verify the badge remains on screen and halts fully inside viewing zone
+              if (isAngleInViewingZone(stopAngle)) {
                 state.incomingId = incoming
                 state.waitingIncomingId = null
                 state.brakeStartAngle = incomingAngle
@@ -406,6 +408,9 @@ export default function LandingPage() {
           }
 
           if (timeInPhase >= 900) {
+            const inc = state.incomingId
+            state.cometStartX = physics[inc] ? physics[inc].x : 0
+            state.cometStartY = physics[inc] ? physics[inc].y : 0
             state.phase = 'COMET'
             state.phaseStartTime = now
             setDebugPhase('COMET')
@@ -440,8 +445,8 @@ export default function LandingPage() {
           // renders — no snap at either end.
           const slotOffX = geom.slotCenterX - geom.heroCenterX
           const slotOffY = geom.slotCenterY - geom.heroCenterY
-          const startPX = physics[incoming] ? physics[incoming].x : (isRight ? geom.rx : -geom.rx)
-          const startPY = physics[incoming] ? physics[incoming].y : 0
+          const startPX = state.cometStartX
+          const startPY = state.cometStartY
           const currentX = startPX + (slotOffX - startPX) * easeP
           const currentY = startPY + (slotOffY - startPY) * easeP
 
