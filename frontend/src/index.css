@@ -1175,22 +1175,24 @@ a:not(:disabled):active,
 .app-shell .card, .app-shell .stat-card { min-width: 0; }
 
 
-/* Shared, brief dotted splash/retract transition for route and auth-flow changes. */
+/* Shared dotted splash/retract transition, aimed at the destination's focus. */
 .page-splash-transition {
   position: fixed; inset: 0; z-index: 1000; pointer-events: none;
-  background-color: rgba(7, 10, 16, 0.92);
-  background-image: radial-gradient(circle, rgba(147,197,253,.48) 1px, transparent 1.6px);
-  background-size: 24px 24px;
-  clip-path: circle(0% at 50% 50%);
+  background-color: rgba(7, 10, 16, 0.90);
+  background-image:
+    radial-gradient(circle 190px at var(--page-focus-x, 50%) var(--page-focus-y, 50%), rgba(125, 211, 252, .42), transparent 72%),
+    radial-gradient(circle, rgba(147,197,253,.38) 1px, transparent 1.6px);
+  background-size: auto, 24px 24px;
+  clip-path: circle(0% at var(--page-focus-x, 50%) var(--page-focus-y, 50%));
   animation: page-splash-retract 720ms cubic-bezier(.16,.78,.22,1) both;
-  will-change: clip-path, opacity;
+  will-change: clip-path, opacity, background-position;
 }
 @keyframes page-splash-retract {
-  0% { clip-path: circle(0% at 50% 50%); opacity: 0; }
+  0% { clip-path: circle(0% at var(--page-focus-x, 50%) var(--page-focus-y, 50%)); opacity: 0; }
   18% { opacity: .92; }
-  48% { clip-path: circle(78% at 50% 50%); opacity: .88; }
-  72% { clip-path: circle(115% at 50% 50%); opacity: .68; }
-  100% { clip-path: circle(0% at 50% 50%); opacity: 0; }
+  48% { clip-path: circle(78% at var(--page-focus-x, 50%) var(--page-focus-y, 50%)); opacity: .86; }
+  72% { clip-path: circle(115% at var(--page-focus-x, 50%) var(--page-focus-y, 50%)); opacity: .62; }
+  100% { clip-path: circle(0% at var(--page-focus-x, 50%) var(--page-focus-y, 50%)); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   .page-splash-transition { animation-duration: 1ms; }
