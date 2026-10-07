@@ -48,6 +48,7 @@ export default function LandingPage() {
   const [strikingId, setStrikingId] = useState(null)
   const [textPhase, setTextPhase] = useState('idle') // 'idle' | 'exiting' | 'entering'
   const [buttonShimmer, setButtonShimmer] = useState(false)
+  const [buttonThinking, setButtonThinking] = useState(false)
   const [displayCount, setDisplayCount] = useState(PLATFORM_CONFIG.github.targetPercent)
   const [reducedMotion, setReducedMotion] = useState(false)
   const [badgeRadius, setBadgeRadius] = useState(240)
@@ -140,9 +141,9 @@ export default function LandingPage() {
             const otherDeg = angles[otherId] % 360
             let gap = (otherDeg - myDeg + 360) % 360
 
-            const MIN_SAFE_GAP = 72
+            const MIN_SAFE_GAP = 90
             if (gap > 0 && gap < MIN_SAFE_GAP) {
-              const elasticity = Math.max(0.04, (gap - 16) / (MIN_SAFE_GAP - 16))
+              const elasticity = Math.max(0.35, gap / MIN_SAFE_GAP)
               speedFactor = Math.min(speedFactor, elasticity)
             }
           })
@@ -227,7 +228,7 @@ export default function LandingPage() {
       incomingCandidateRef.current = nextId
     }
 
-    const interval = setInterval(scheduleNextCycle, 6400)
+    const interval = setInterval(scheduleNextCycle, 11500)
 
     return () => {
       isDestroyed = true
@@ -261,7 +262,7 @@ export default function LandingPage() {
         startTime: performance.now(),
       }
 
-      // 4. Exact moment of impact (360ms later)
+      // 4. Exact moment of impact (360ms plunge)
       setTimeout(() => {
         strikeProgressRef.current = null
         orbitingRef.current[launchingId] = false
@@ -270,55 +271,69 @@ export default function LandingPage() {
         const prevActive = activeStageIdRef.current
         setExitingStageId(prevActive)
         activeStageIdRef.current = launchingId
-        setActiveStageId(launchingId) // Only now replaces center icon!
+        setActiveStageId(launchingId) // Replaces center icon
+        incomingCandidateRef.current = null
 
-        setTextPhase('entering')
-        glowDimRef.current = 1.0
-
-        // Return previous icon back into orbit queue
+        // Return previous icon smoothly into orbit queue with even spacing
         setTimeout(() => {
           orbitingRef.current[prevActive] = true
-          anglesRef.current[prevActive] = 230
+          const otherAngles = BADGES.filter(id => id !== prevActive && orbitingRef.current[id]).map(id => anglesRef.current[id])
+          anglesRef.current[prevActive] = (Math.max(...otherAngles, 0) + 120) % 360
           setExitingStageId(null)
-        }, 400)
+        }, 350)
 
-        // Impact slam on water ripple canvas
+        // Trigger impact slam ripple
         if (centerSlotRef.current && rippleRef.current) {
           const rect = centerSlotRef.current.getBoundingClientRect()
           const cx = rect.left + rect.width / 2
           const cy = rect.top + rect.height / 2
 
-          let btnX = cx
-          let btnY = cy + 180
-          if (buttonRef.current) {
-            const btnRect = buttonRef.current.getBoundingClientRect()
-            btnX = btnRect.left + btnRect.width / 2
-            btnY = btnRect.top + btnRect.height / 2
-          }
-
           rippleRef.current.triggerSlam(cx, cy, {
-            intensity: 380,
-            blastRadius: 140,
-            targetX: btnX,
-            targetY: btnY,
+            intensity: 320,
+            blastRadius: 120,
           })
         }
 
-        // Percentage counter roll-up
-        const target = PLATFORM_CONFIG[launchingId].targetPercent
-        let current = 0
-        setDisplayCount(0)
-        clearInterval(countIntervalRef.current)
-        const stepTime = 800 / target
-        countIntervalRef.current = setInterval(() => {
-          current += 2
-          if (current >= target) {
-            setDisplayCount(target)
-            clearInterval(countIntervalRef.current)
-          } else {
-            setDisplayCount(current)
-          }
-        }, stepTime)
+        // Keep text hidden while ripples settle; fade in once dust settles (700ms later)
+        setTimeout(() => {
+          glowDimRef.current = 1.0
+          setTextPhase("entering")
+
+          // Percentage counter roll-up
+          const target = PLATFORM_CONFIG[launchingId].targetPercent
+          let current = 0
+          setDisplayCount(0)
+          clearInterval(countIntervalRef.current)
+          const stepTime = 800 / target
+          countIntervalRef.current = setInterval(() => {
+            current += 2
+            if (current >= target) {
+              setDisplayCount(target)
+              clearInterval(countIntervalRef.current)
+            } else {
+              setDisplayCount(current)
+            }
+          }, stepTime)
+
+          // 5 seconds after text stabilizes, glow returns down to CTA button
+          setTimeout(() => {
+            if (buttonRef.current && rippleRef.current) {
+              const btnRect = buttonRef.current.getBoundingClientRect()
+              const btnX = btnRect.left + btnRect.width / 2
+              const btnY = btnRect.top + btnRect.height / 2
+              rippleRef.current.streamGlowToTarget(btnX, btnY)
+            }
+
+            // 3 seconds after glow returns, button does AI thinking text simmer
+            setTimeout(() => {
+              setButtonThinking(true)
+              setTimeout(() => {
+                setButtonThinking(false)
+                setTextPhase("idle")
+              }, 3200)
+            }, 3000)
+          }, 5000)
+        }, 700)
       }, 360)
     }, 850)
 
@@ -444,7 +459,7 @@ export default function LandingPage() {
               className="pointer-events-none absolute inset-0 w-1/2 bg-gradient-to-r from-transparent via-black/25 to-transparent animate-btn-shimmer"
             />
           )}
-          <span className="relative z-10">Get a job</span>
+          <span className={`relative z-10 ${buttonThinking ? "ai-thinking-text font-bold" : ""}`}>Get a job</span>
         </Link>
       </div>
     </main>

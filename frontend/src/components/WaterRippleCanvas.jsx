@@ -17,6 +17,9 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
     triggerSlam: (clientX, clientY, options = {}) => {
       triggerSlamInternal(clientX, clientY, options)
     },
+    streamGlowToTarget: (targetX, targetY) => {
+      startGlowStream(targetX, targetY)
+    },
     setHoverLights: (lights = [], dim = 1.0) => {
       hoverLightsRef.current = lights
       glowDimRef.current = dim
