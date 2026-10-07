@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Lightbulb, Code2, Check, ArrowRight } from 'lucide-react'
+import { toast } from 'sonner'
+import { Lightbulb, Code2, Check } from 'lucide-react'
 import { Github, Linkedin } from './Icons'
 import WaterRippleCanvas from './WaterRippleCanvas'
 
@@ -41,7 +42,6 @@ const PLATFORM_CONFIG = {
 
 const BADGES = ['github', 'leetcode', 'linkedin', 'skills']
 
-// Per-badge organic drift constants
 const DRIFT_CONFIG = {
   github:   { T1: 8.2,  phi1: 0.2, T2: 11.4, phi2: 1.1 },
   leetcode: { T1: 9.6,  phi1: 2.3, T2: 10.2, phi2: 0.5 },
@@ -59,196 +59,230 @@ function AnimatedChars({ text, baseDelay = 0, speed = 18 }) {
           style={{
             animationDelay: `${baseDelay + i * speed}ms`,
             animationFillMode: 'forwards',
+            whiteSpace: char === ' ' ? 'pre' : 'normal',
           }}
         >
-          {char === ' ' ? '\u00A0' : char}
+          {char}
         </span>
       ))}
     </>
   )
 }
 
-export default function OrbitStage({ onMounted, animationReady = true }) {
-  const [centerBadge, setCenterBadge] = useState('skills')
-  const [displayedPercent, setDisplayedPercent] = useState(96)
-  const [captionKey, setCaptionKey] = useState(0)
-  const [isCtaShimmering, setIsCtaShimmering] = useState(false)
-  const [isTextFading, setIsTextFading] = useState(false)
-  const [fadingOrb, setFadingOrb] = useState(null)
-  const [orbsParked, setOrbsParked] = useState(false)
+export default function OrbitStage() {
+  const [activeStageId, setActiveStageId] = useState('github')
+  const [exitingStageId, setExitingStageId] = useState(null)
+  const [exitingOpacity, setExitingOpacity] = useState(1.0)
+  const [textPhase, setTextPhase] = useState('idle') // 'idle' | 'exiting' | 'entering' | 'hidden'
+  const [displayCount, setDisplayCount] = useState(PLATFORM_CONFIG.github.targetPercent)
+  const [reducedMotion, setReducedMotion] = useState(false)
+  const [ctaShimmerActive, setCtaShimmerActive] = useState(false)
+  const [ctaShimmerCycle, setCtaShimmerCycle] = useState(0)
+  const [pulseRingActive, setPulseRingActive] = useState(false)
   const [stackTicks, setStackTicks] = useState(false)
 
-  const canvasRef = useRef(null)
-  const stageRef = useRef(null)
-  const slotRef = useRef(null)
+  const containerRef = useRef(null)
+  const centerSlotRef = useRef(null)
   const headingRef = useRef(null)
   const captionRef = useRef(null)
-  const ctaRef = useRef(null)
+  const buttonRef = useRef(null)
+  const signInRef = useRef(null)
   const ticksRef = useRef(null)
-  const footerRef = useRef(null)
+  const rippleRef = useRef(null)
+  const badgeDomRefs = useRef({})
+  const cometTailRef = useRef(null)
 
+  // Layout & geometry cached state
+  const geomRef = useRef({
+    heroCenterX: 0,
+    heroCenterY: 0,
+    slotCenterX: 0,
+    slotCenterY: 0,
+    exclusionRect: { left: 0, top: 0, right: 0, bottom: 0 },
+    rx: 280,
+    ry: 280,
+    iconRadius: 27,
+    pad: 28,
+    isParked: false,
+    width: 0,
+    height: 0,
+  })
+
+  // State machine & animation refs
   const stateRef = useRef({
-    phase: 'HOLD',
-    timer: 0,
+    phase: 'HOLD', // HOLD | BRAKE | CHARGE | COMET | IMPACT | SETTLE | READ | PULSE | WAKE
+    phaseStartTime: performance.now(),
+    currentActiveId: 'github',
+    // 3 fixed equilateral triangle slots (0, 120, 240 deg)
+    floatingSlots: ['leetcode', 'linkedin', 'skills'],
+    incomingSlotIndex: 0, // 0 -> 1 -> 2 -> 0 ...
+    incomingId: null,
+    incomingSlot: null,
+    returningId: null,
+    returningSlot: null,
+    returningOpacity: 0,
+    dockSide: 'right', // 'right' (angle 0) or 'left' (angle PI)
+    brakeStartAngle: 0,
+    brakeDelta: 0,
+    brakeDuration: 1400,
     sharedPhase: 0,
-    angularVelocity: (26 * Math.PI) / 180,
-    targetVelocity: (26 * Math.PI) / 180,
-    incomingBadge: null,
-    incomingStartPos: null,
-    incomingProgress: 0,
-    centerBadge: 'skills',
-    // Triangle slot order is strictly fixed: no random swapping!
-    // Vertices of triangle around center: 0, 120 deg (2π/3), 240 deg (4π/3)
-    floatingBadges: ['github', 'leetcode', 'linkedin'],
-    lastTime: null,
-    isTabHidden: false,
+    currentSpeed: (26 * Math.PI) / 180,
+    targetSpeed: (26 * Math.PI) / 180,
+    lastTime: performance.now(),
+    readTargetCount: PLATFORM_CONFIG.github.targetPercent,
+    readCountStart: 0,
+    readCountDone: true,
+    cometStartX: 0,
+    cometStartY: 0,
+    cycleCount: 0,
     physics: {
-      github:   { x: 0, y: 0, vx: 0, vy: 0 },
-      leetcode: { x: 0, y: 0, vx: 0, vy: 0 },
-      linkedin: { x: 0, y: 0, vx: 0, vy: 0 },
-      skills:   { x: 0, y: 0, vx: 0, vy: 0 },
-    },
-    geometry: {
-      slotCenterX: 0,
-      slotCenterY: 0,
-      rx: 280,
-      ry: 280,
-      iconRadius: 26,
-      exclusionRect: { left: 0, top: 0, right: 0, bottom: 0 },
-      isParked: false,
+      github:   { x: 0, y: 0, scale: 1, opacity: 0 },
+      leetcode: { x: 0, y: 0, scale: 1, opacity: 0.85 },
+      linkedin: { x: 0, y: 0, scale: 1, opacity: 0.85 },
+      skills:   { x: 0, y: 0, scale: 1, opacity: 0.85 },
     },
   })
 
-  // Measure exclusion zone and solve orbit clearance
+  // Detect reduced-motion preference
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    setReducedMotion(mq.matches)
+    const handler = (e) => setReducedMotion(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+
+  // Geometry measurement & exclusion zone calculation
   const updateGeometry = () => {
-    if (!stageRef.current || !slotRef.current) return
-    const stage = stageRef.current.getBoundingClientRect()
-    const slot = slotRef.current.getBoundingClientRect()
+    const vw = window.innerWidth
+    const vh = window.innerHeight
 
-    const slotCenterX = slot.left + slot.width / 2 - stage.left
-    const slotCenterY = slot.top + slot.height / 2 - stage.top
-
-    const vw = stage.width || window.innerWidth
-    const vh = stage.height || window.innerHeight
-
-    let iconRadius = vw < 360 ? 16 : vw < 480 ? 20 : 26
     let pad = vw < 640 ? 20 : 28
+    let iconRadius = vw < 360 ? 16 : vw < 480 ? 20 : 27
 
-    const rects = [
-      slotRef.current?.getBoundingClientRect(),
-      headingRef.current?.getBoundingClientRect(),
-      captionRef.current?.getBoundingClientRect(),
-      ctaRef.current?.getBoundingClientRect(),
-      ticksRef.current?.getBoundingClientRect(),
-      footerRef.current?.getBoundingClientRect(),
-    ].filter(Boolean).map(r => ({
-      left: r.left - stage.left,
-      top: r.top - stage.top,
-      right: r.right - stage.left,
-      bottom: r.bottom - stage.top,
-    }))
+    const slotEl = centerSlotRef.current
+    let slotCenterX = vw / 2
+    let slotCenterY = vh / 2
+    if (slotEl) {
+      const sr = slotEl.getBoundingClientRect()
+      slotCenterX = sr.left + sr.width / 2
+      slotCenterY = sr.top + sr.height / 2
+    }
 
-    const unionOf = (padding) => {
+    const elements = [
+      headingRef.current,
+      centerSlotRef.current,
+      captionRef.current,
+      buttonRef.current,
+      signInRef.current,
+      ticksRef.current,
+    ].filter(Boolean)
+
+    const calcUnion = (p) => {
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-      rects.forEach(r => {
+      for (const el of elements) {
+        const r = el.getBoundingClientRect()
         minX = Math.min(minX, r.left)
         minY = Math.min(minY, r.top)
         maxX = Math.max(maxX, r.right)
         maxY = Math.max(maxY, r.bottom)
-      })
+      }
       return {
-        left: minX - padding,
-        top: minY - padding,
-        right: maxX + padding,
-        bottom: maxY + padding,
+        left: minX - p,
+        top: minY - p,
+        right: maxX + p,
+        bottom: maxY + p,
       }
     }
 
-    const footTop = footerRef.current ? (footerRef.current.getBoundingClientRect().top - stage.top) : vh - 40
+    let exclusionRect = calcUnion(pad)
 
-    const fitOrbit = (orbR, padV, rect) => {
-      const rxCap = Math.max(120, slotCenterX - (orbR + padV))
-      const ryCapTop = slotCenterY - (orbR + padV + 8)
-      const ryCapBottom = footTop - slotCenterY - (orbR + padV)
-      const ryCap = Math.min(ryCapTop, ryCapBottom)
+    // Margin from viewport safe boundary
+    const margin = 14
+    const rxCap = Math.max(80, Math.min(slotCenterX, vw - slotCenterX) - (iconRadius + margin))
+    const ryCap = Math.max(80, Math.min(slotCenterY, vh - slotCenterY) - (iconRadius + margin))
 
-      const halfW = Math.max(slotCenterX - rect.left, rect.right - slotCenterX)
-      const halfH = Math.max(slotCenterY - rect.top, rect.bottom - slotCenterY)
-
-      if (rxCap < halfW || ryCap < halfH) return null
-
+    // Helper: test if an orbit (rx, ry) clears exclusionRect
+    const testClearance = (rX, rY, rect, orbR) => {
       const corners = [
         [rect.left, rect.top],
         [rect.right, rect.top],
         [rect.left, rect.bottom],
         [rect.right, rect.bottom],
       ]
-
       let maxCornerDist = 0
-      corners.forEach(([cx, cy]) => {
+      for (const [cx, cy] of corners) {
         maxCornerDist = Math.max(maxCornerDist, Math.hypot(cx - slotCenterX, cy - slotCenterY))
-      })
-      const minCircle = maxCornerDist + orbR + padV
-      if (minCircle <= rxCap && minCircle <= ryCap) {
-        return { rx: minCircle, ry: minCircle }
+      }
+      const circleR = maxCornerDist + orbR
+      if (circleR <= rxCap && circleR <= ryCap) {
+        return { rx: circleR, ry: circleR, type: 'circle' }
       }
 
-      const needRx = rxCap
-      let needRy = halfH
+      // Try ellipse with rx = rxCap
+      let needRy = 0
+      let possible = true
       for (const [cx, cy] of corners) {
-        const dx = cx - slotCenterX
-        const t = 1 - (dx * dx) / (needRx * needRx)
-        if (t > 0.0001) {
-          needRy = Math.max(needRy, Math.abs(cy - slotCenterY) / Math.sqrt(t))
-        } else {
-          return null
+        const dx = Math.abs(cx - slotCenterX)
+        const dy = Math.abs(cy - slotCenterY) + orbR
+        if (dx >= rxCap) continue
+        const denom = 1 - (dx * dx) / (rxCap * rxCap)
+        if (denom <= 0.0001) {
+          possible = false
+          break
         }
+        needRy = Math.max(needRy, dy / Math.sqrt(denom))
       }
-      needRy += orbR + padV
-      if (needRy > ryCap) return null
-      return { rx: needRx, ry: needRy }
+      if (possible && needRy <= ryCap) {
+        return { rx: rxCap, ry: Math.max(needRy, 100), type: 'ellipse' }
+      }
+      return null
     }
 
-    let rect = unionOf(pad)
-    let fit = fitOrbit(iconRadius, pad, rect)
-    let parked = false
+    let fit = testClearance(rxCap, ryCap, exclusionRect, iconRadius)
+    let isParked = false
     let shouldStackTicks = false
 
     if (!fit) {
+      // Fallback 1: stack ticks, shrink orbs to 40px (32px under 360px), pad to 12px
       shouldStackTicks = true
       iconRadius = vw < 360 ? 16 : 20
       pad = 12
-      rect = unionOf(pad)
-      fit = fitOrbit(iconRadius, pad, rect)
+      exclusionRect = calcUnion(pad)
+      fit = testClearance(rxCap, ryCap, exclusionRect, iconRadius)
       if (!fit) {
-        parked = true
+        isParked = true
       }
     }
 
     setStackTicks(shouldStackTicks)
-    setOrbsParked(parked)
 
-    const geom = {
+    const finalGeom = {
+      heroCenterX: vw / 2,
+      heroCenterY: vh / 2,
       slotCenterX,
       slotCenterY,
-      rx: fit ? fit.rx : 200,
-      ry: fit ? fit.ry : 200,
+      exclusionRect,
+      rx: fit ? fit.rx : Math.min(rxCap, 240),
+      ry: fit ? fit.ry : Math.min(ryCap, 240),
       iconRadius,
-      exclusionRect: rect,
-      isParked: parked,
+      pad,
+      isParked,
+      width: vw,
+      height: vh,
     }
 
-    stateRef.current.geometry = geom
+    geomRef.current = finalGeom
 
-    if (canvasRef.current?.setProtectedRect) {
-      canvasRef.current.setProtectedRect(rect)
+    if (rippleRef.current?.setProtectedRect) {
+      rippleRef.current.setProtectedRect(exclusionRect)
     }
   }
 
   useLayoutEffect(() => {
     updateGeometry()
     const ro = new ResizeObserver(() => updateGeometry())
-    if (stageRef.current) ro.observe(stageRef.current)
+    if (containerRef.current) ro.observe(containerRef.current)
     window.addEventListener('resize', updateGeometry)
     return () => {
       ro.disconnect()
@@ -256,180 +290,294 @@ export default function OrbitStage({ onMounted, animationReady = true }) {
     }
   }, [])
 
-  // Main animation loop
+  // Main 60fps unified animation loop
   useEffect(() => {
+    if (reducedMotion) return
+
     let animId = null
-    const s = stateRef.current
+    const baseSpeedRad = (26 * Math.PI) / 180 // ~26 deg/s (~13.85s/lap)
+    const MIN_HOLD_TIME = 4200
 
-    const handleVisibility = () => {
-      s.isTabHidden = document.hidden
-      if (!document.hidden) s.lastTime = null
-    }
-    document.addEventListener('visibilitychange', handleVisibility)
+    const loop = (now) => {
+      const state = stateRef.current
+      const geom = geomRef.current
+      const physics = state.physics
 
-    const BASE_SPEED = (26 * Math.PI) / 180
-    const HOLD_TIME = 4500
-    const CHARGE_TIME = 700
-    const COMET_TIME = 550
-    const IMPACT_TIME = 80
-    const READ_TIME = 3200
+      const rawDt = (now - state.lastTime) / 1000
+      state.lastTime = now
+      const dt = Math.min(rawDt, 0.05)
 
-    const loop = (timestamp) => {
-      if (s.lastTime === null) {
-        s.lastTime = timestamp
+      if (document.visibilityState !== 'visible') {
         animId = requestAnimationFrame(loop)
         return
       }
 
-      const rawDt = (timestamp - s.lastTime) / 1000
-      s.lastTime = timestamp
-      const dt = Math.min(rawDt, 0.1)
+      const tSec = now / 1000
+      const timeInPhase = now - state.phaseStartTime
 
-      if (s.isTabHidden) {
-        animId = requestAnimationFrame(loop)
-        return
-      }
+      // --- STATE MACHINE ---
+      switch (state.phase) {
+        case 'HOLD': {
+          state.sharedPhase = (state.sharedPhase + baseSpeedRad * dt) % (2 * Math.PI)
+          state.currentSpeed = baseSpeedRad
 
-      const geom = s.geometry
+          if (timeInPhase >= MIN_HOLD_TIME && !geom.isParked) {
+            // Incoming slot index strictly cycles: 0 -> 1 -> 2 -> 0 -> ...
+            const incomingSlot = state.incomingSlotIndex
+            const candidate = state.floatingSlots[incomingSlot]
 
-      if (!geom.isParked) {
-        // Continuous rotation maintaining equilateral triangle: angles at 0, 120, 240 deg
-        s.angularVelocity += (s.targetVelocity - s.angularVelocity) * Math.min(dt * 3.5, 1)
-        s.sharedPhase = (s.sharedPhase + s.angularVelocity * dt) % (2 * Math.PI)
+            // Calculate current slot angle
+            const slotAngle = (state.sharedPhase + incomingSlot * ((2 * Math.PI) / 3)) % (2 * Math.PI)
+            const normSlotAngle = (slotAngle + 2 * Math.PI) % (2 * Math.PI)
 
-        // Dock lane along the right side of the center slot
-        const DOCK_LANE_X = geom.rx * 0.95
-        const DOCK_LANE_Y = 0
+            // Target dock angle at height of center slot:
+            // Left dock = Math.PI (x = -rx, y = 0), Right dock = 2*Math.PI (x = +rx, y = 0)
+            const targetDock = normSlotAngle < Math.PI ? Math.PI : 2 * Math.PI
+            const distToDock = targetDock - normSlotAngle
 
-        switch (s.phase) {
-          case 'HOLD': {
-            s.timer += dt * 1000
-            s.targetVelocity = BASE_SPEED
-            if (s.timer >= HOLD_TIME) {
-              s.phase = 'BRAKE'
-              s.timer = 0
-              s.targetVelocity = 0
+            const brakeSec = 1.4
+            const brakeDelta = (baseSpeedRad * brakeSec) / 2
+
+            // Start BRAKE when approaching the dock point
+            if (distToDock <= brakeDelta + baseSpeedRad * dt * 2) {
+              state.incomingId = candidate
+              state.incomingSlot = incomingSlot
+              state.brakeStartAngle = state.sharedPhase
+              state.brakeDelta = distToDock
+              state.brakeDuration = Math.max(600, (2 * distToDock / baseSpeedRad) * 1000)
+              state.dockSide = targetDock === Math.PI ? 'left' : 'right'
+              state.phase = 'BRAKE'
+              state.phaseStartTime = now
             }
-            break
           }
-          case 'BRAKE': {
-            s.timer += dt * 1000
-            if (s.angularVelocity < 0.05 || s.timer > 1400) {
-              s.phase = 'CHARGE'
-              s.timer = 0
-              // Pick the next floating orb strictly in triangle order to strike center
-              const candidate = s.floatingBadges[0]
-              s.incomingBadge = candidate
-              const candIndex = 0
-              const slotAngle = (s.sharedPhase + candIndex * ((2 * Math.PI) / 3)) % (2 * Math.PI)
-              s.incomingStartPos = {
-                x: Math.cos(slotAngle) * geom.rx,
-                y: Math.sin(slotAngle) * geom.ry,
-              }
-              s.incomingProgress = 0
-            }
-            break
-          }
-          case 'CHARGE': {
-            s.timer += dt * 1000
-            if (s.timer >= CHARGE_TIME) {
-              s.phase = 'COMET'
-              s.timer = 0
-              setIsTextFading(true)
-              setFadingOrb(s.centerBadge)
-            }
-            break
-          }
-          case 'COMET': {
-            s.timer += dt * 1000
-            const p = Math.min(s.timer / COMET_TIME, 1)
-            // cubic-bezier(0.32,0.72,0,1)
-            s.incomingProgress = p * p * (3 - 2 * p)
-            if (p >= 1) {
-              s.phase = 'IMPACT'
-              s.timer = 0
-            }
-            break
-          }
-          case 'IMPACT': {
-            s.timer += dt * 1000
-            if (s.timer >= IMPACT_TIME) {
-              const oldCenter = s.centerBadge
-              const newCenter = s.incomingBadge
-              s.centerBadge = newCenter
-              setCenterBadge(newCenter)
-              setDisplayedPercent(PLATFORM_CONFIG[newCenter].targetPercent)
-              setCaptionKey(prev => prev + 1)
-
-              // Rotate badge order in fixed triangle slots: new center leaves, old center takes its slot
-              s.floatingBadges = s.floatingBadges.map(b => b === newCenter ? oldCenter : b)
-
-              setFadingOrb(null)
-              setIsTextFading(false)
-              setIsCtaShimmering(true)
-
-              if (canvasRef.current?.triggerSlam) {
-                canvasRef.current.triggerSlam(geom.slotCenterX, geom.slotCenterY)
-              }
-
-              s.phase = 'SETTLE'
-              s.timer = 0
-            }
-            break
-          }
-          case 'SETTLE': {
-            s.timer += dt * 1000
-            if (s.timer >= 500) {
-              s.phase = 'READ'
-              s.timer = 0
-            }
-            break
-          }
-          case 'READ': {
-            s.timer += dt * 1000
-            if (s.timer >= READ_TIME) {
-              setIsCtaShimmering(false)
-              s.phase = 'WAKE'
-              s.timer = 0
-              s.targetVelocity = BASE_SPEED
-            }
-            break
-          }
-          case 'WAKE': {
-            s.timer += dt * 1000
-            if (s.timer >= 1200) {
-              s.phase = 'HOLD'
-              s.timer = 0
-            }
-            break
-          }
-          default:
-            break
+          break
         }
 
-        // Calculate positions for 3 floating badges around equilateral triangle
-        const timeSec = timestamp / 1000
-        const floating = s.floatingBadges
-        const curPhysics = s.physics
+        case 'BRAKE': {
+          const p = Math.min(1, timeInPhase / state.brakeDuration)
+          const progress = 1 - (1 - p) * (1 - p)
+          state.sharedPhase = (state.brakeStartAngle + state.brakeDelta * progress) % (2 * Math.PI)
+          state.currentSpeed = 0
 
-        floating.forEach((id, idx) => {
-          const p = curPhysics[id]
-          if (s.phase === 'COMET' && id === s.incomingBadge) {
-            const t = s.incomingProgress
-            const start = s.incomingStartPos || { x: geom.rx, y: 0 }
-            p.x = start.x + (0 - start.x) * t
-            p.y = start.y + (0 - start.y) * t
-            return
+          if (p >= 1) {
+            state.phase = 'CHARGE'
+            state.phaseStartTime = now
+            setTextPhase('exiting')
+            setExitingStageId(state.currentActiveId)
+            setExitingOpacity(1.0)
+          }
+          break
+        }
+
+        case 'CHARGE': {
+          state.currentSpeed = 0
+          // Center icon fades in-place with opacity only: 150-700ms (1 -> 0.1)
+          if (timeInPhase >= 150) {
+            const fadeElapsed = timeInPhase - 150
+            const fadeP = Math.min(1, fadeElapsed / 550)
+            setExitingOpacity(Math.max(0.1, 1 - 0.9 * fadeP))
           }
 
-          // Equilateral triangle vertices: index * 2π/3
-          const slotAngle = (s.sharedPhase + idx * ((2 * Math.PI) / 3)) % (2 * Math.PI)
+          if (timeInPhase >= 900) {
+            const dockX = state.dockSide === 'left' ? -geom.rx : geom.rx
+            state.cometStartX = dockX
+            state.cometStartY = 0
+            state.phase = 'COMET'
+            state.phaseStartTime = now
+            setTextPhase('hidden')
+          }
+          break
+        }
+
+        case 'COMET': {
+          state.currentSpeed = 0
+          // Complete center icon fade to 0 over first 150ms of comet run
+          if (timeInPhase <= 150) {
+            setExitingOpacity(0.1 * (1 - timeInPhase / 150))
+          } else {
+            setExitingOpacity(0)
+            setExitingStageId(null)
+          }
+
+          const cometDuration = 480
+          const p = Math.min(1, timeInPhase / cometDuration)
+          const easeP = Math.pow(p, 2.4)
+
+          const incoming = state.incomingId
+          const currentX = state.cometStartX * (1 - easeP)
+          const currentY = 0 // Exactly horizontal along center slot height
+
+          if (physics[incoming]) {
+            physics[incoming].x = currentX
+            physics[incoming].y = currentY
+            physics[incoming].scale = 1.14 - 0.14 * easeP
+            physics[incoming].opacity = 1.0
+          }
+
+          // Update comet tail
+          if (cometTailRef.current) {
+            const tailEl = cometTailRef.current
+            tailEl.style.opacity = `${(1 - easeP * 0.4) * 0.55}`
+            const tailLen = 130 * Math.sin(p * Math.PI)
+            const moveAngle = Math.atan2(0, -state.cometStartX)
+            const tailX = currentX + Math.cos(moveAngle + Math.PI) * (geom.iconRadius + 4)
+            const tailY = currentY + Math.sin(moveAngle + Math.PI) * (geom.iconRadius + 4)
+            tailEl.style.transform = `translate3d(${tailX}px, ${tailY}px, 0) rotate(${moveAngle + Math.PI}rad)`
+            tailEl.style.width = `${Math.max(0, tailLen)}px`
+          }
+
+          // Gentle dot nudge along flight corridor
+          if (rippleRef.current && p > 0.1 && p < 0.9) {
+            rippleRef.current.displaceAt(geom.slotCenterX + currentX, geom.slotCenterY, 8)
+          }
+
+          if (p >= 1) {
+            if (cometTailRef.current) cometTailRef.current.style.opacity = '0'
+            state.phase = 'IMPACT'
+            state.phaseStartTime = now
+          }
+          break
+        }
+
+        case 'IMPACT': {
+          state.currentSpeed = 0
+          if (timeInPhase <= dt * 1000 + 10) {
+            const oldCenter = state.currentActiveId
+            const newCenter = state.incomingId
+            state.currentActiveId = newCenter
+            setActiveStageId(newCenter)
+            setExitingStageId(null)
+            setExitingOpacity(0)
+            setPulseRingActive(true)
+            setTimeout(() => setPulseRingActive(false), 800)
+
+            // REPLACEMENT: old center orb replaces incoming orb in the vacated slot
+            state.floatingSlots[state.incomingSlot] = oldCenter
+            state.returningId = oldCenter
+            state.returningSlot = state.incomingSlot
+            state.returningOpacity = 0
+
+            state.cycleCount += 1
+            if (import.meta.env.DEV) {
+              console.log(`[OrbitStage] Center platform: ${newCenter} (Cycle ${state.cycleCount}) | Floating slots:`, state.floatingSlots)
+            }
+
+            if (rippleRef.current) {
+              rippleRef.current.triggerSlam(geom.slotCenterX, geom.slotCenterY)
+            }
+          }
+
+          if (timeInPhase >= 80) {
+            state.phase = 'SETTLE'
+            state.phaseStartTime = now
+          }
+          break
+        }
+
+        case 'SETTLE': {
+          state.currentSpeed = 0
+          // Re-materialize old center orb in vacated floating slot (opacity only: 0 -> 0.5 over 500ms)
+          if (timeInPhase >= 300) {
+            const retP = Math.min(1, (timeInPhase - 300) / 500)
+            state.returningOpacity = 0.5 * retP
+          }
+
+          const minMet = timeInPhase >= 700
+          const maxMet = timeInPhase >= 2200
+          const isCanvasSettled = rippleRef.current ? rippleRef.current.isSettled() : true
+
+          if ((minMet && isCanvasSettled) || maxMet) {
+            state.phase = 'READ'
+            state.phaseStartTime = now
+            setTextPhase('entering')
+
+            state.readTargetCount = PLATFORM_CONFIG[state.currentActiveId].targetPercent
+            state.readCountStart = now
+            state.readCountDone = false
+            setDisplayCount(0)
+          }
+          break
+        }
+
+        case 'READ': {
+          state.currentSpeed = 0
+          // Smooth count-up interpolation over 1200ms with easeOutCubic
+          if (!state.readCountDone) {
+            const countElapsed = now - state.readCountStart
+            const countP = Math.min(1, countElapsed / 1200)
+            const easeCount = 1 - Math.pow(1 - countP, 3)
+            setDisplayCount(Math.round(state.readTargetCount * easeCount))
+
+            if (countP >= 1) {
+              state.readCountDone = true
+              setDisplayCount(state.readTargetCount)
+            }
+          }
+
+          // Hold READ for 1200ms after count finishes + 2500ms quiet pause
+          if (state.readCountDone && timeInPhase >= 1200 + 3700) {
+            state.phase = 'PULSE'
+            state.phaseStartTime = now
+            setCtaShimmerCycle((c) => c + 1)
+            setCtaShimmerActive(true)
+          }
+          break
+        }
+
+        case 'PULSE': {
+          state.currentSpeed = 0
+          const pulseElapsed = now - state.phaseStartTime
+          const shimmerDuration = reducedMotion ? 1200 : 3550
+          const totalPulseDuration = shimmerDuration + 600
+
+          if (pulseElapsed >= shimmerDuration && ctaShimmerActive) {
+            setCtaShimmerActive(false)
+          }
+
+          if (pulseElapsed >= totalPulseDuration) {
+            setCtaShimmerActive(false)
+            // Cycle incoming slot strictly in triangle vertex order: 0 -> 1 -> 2 -> 0 -> ...
+            state.incomingSlotIndex = (state.incomingSlotIndex + 1) % 3
+            state.phase = 'WAKE'
+            state.phaseStartTime = now
+          }
+          break
+        }
+
+        case 'WAKE': {
+          const wakeP = Math.min(1, timeInPhase / 2500)
+          const easeWake = 0.5 - 0.5 * Math.cos(wakeP * Math.PI)
+          state.currentSpeed = baseSpeedRad * easeWake
+          state.sharedPhase = (state.sharedPhase + state.currentSpeed * dt) % (2 * Math.PI)
+
+          if (wakeP >= 1) {
+            state.phase = 'HOLD'
+            state.phaseStartTime = now
+            setTextPhase('idle')
+          }
+          break
+        }
+
+        default:
+          break
+      }
+
+      // --- POSITIONS PASS ---
+      const isHalted = state.phase !== 'HOLD' && state.phase !== 'WAKE'
+      const driftScale = isHalted ? 0.25 : 1.0
+
+      if (!geom.isParked) {
+        state.floatingSlots.forEach((id, slotIdx) => {
+          if (state.phase === 'COMET' && id === state.incomingId) return
+
+          const p = physics[id]
+          const slotAngle = (state.sharedPhase + slotIdx * ((2 * Math.PI) / 3)) % (2 * Math.PI)
           const sqX = Math.cos(slotAngle) * geom.rx
           const sqY = Math.sin(slotAngle) * geom.ry
 
-          const d = DRIFT_CONFIG[id] || { T1: 8, phi1: 0, T2: 11, phi2: 0 }
-          const rDrift = 5 * Math.sin(timeSec / d.T1 + d.phi1)
-          const tDrift = 3 * Math.sin(timeSec / d.T2 + d.phi2)
+          const dCfg = DRIFT_CONFIG[id] || { T1: 8, phi1: 0, T2: 11, phi2: 0 }
+          const rDrift = 5 * Math.sin(tSec / dCfg.T1 + dCfg.phi1) * driftScale
+          const tDrift = 3 * Math.sin(tSec / dCfg.T2 + dCfg.phi2) * driftScale
 
           const invLen = 1 / (Math.hypot(sqX, sqY) || 1)
           const radDirX = sqX * invLen
@@ -440,7 +588,7 @@ export default function OrbitStage({ onMounted, animationReady = true }) {
           let nextX = sqX + radDirX * rDrift + tanDirX * tDrift
           let nextY = sqY + radDirY * rDrift + tanDirY * tDrift
 
-          // Exclusion always wins: clamp orb outside exclusion zone
+          // Exclusion zone clamp: exclusion ALWAYS wins over orbit shape
           const ex = geom.exclusionRect
           let absX = geom.slotCenterX + nextX
           let absY = geom.slotCenterY + nextY
@@ -465,54 +613,102 @@ export default function OrbitStage({ onMounted, animationReady = true }) {
           p.y = absY - geom.slotCenterY
         })
 
-        // Separation enforcement (minimum 2 orb diameters between floating orbs)
+        // Minimum spacing between floating orbs (2 orb diameters = 4 * iconRadius)
         const minCenterDist = geom.iconRadius * 4
-        for (let i = 0; i < floating.length; i++) {
-          for (let j = i + 1; j < floating.length; j++) {
-            const p1 = curPhysics[floating[i]]
-            const p2 = curPhysics[floating[j]]
+        for (let i = 0; i < state.floatingSlots.length; i++) {
+          for (let j = i + 1; j < state.floatingSlots.length; j++) {
+            const idA = state.floatingSlots[i]
+            const idB = state.floatingSlots[j]
+            if (state.phase === 'COMET' && (idA === state.incomingId || idB === state.incomingId)) continue
+            const p1 = physics[idA]
+            const p2 = physics[idB]
             const dx = p2.x - p1.x
             const dy = p2.y - p1.y
             const dist = Math.hypot(dx, dy)
             if (dist > 0 && dist < minCenterDist) {
               const overlap = (minCenterDist - dist) / 2
-              const nx = dx / dist
-              const ny = dy / dist
-              p1.x -= nx * overlap
-              p1.y -= ny * overlap
-              p2.x += nx * overlap
-              p2.y += ny * overlap
+              p1.x -= (dx / dist) * overlap
+              p1.y -= (dy / dist) * overlap
+              p2.x += (dx / dist) * overlap
+              p2.y += (dy / dist) * overlap
             }
           }
         }
       } else {
         // Parked orbs fallback: gentle drift in free bands above/below content
-        const timeSec = timestamp / 1000
-        const curPhysics = s.physics
-        const floating = s.floatingBadges
-        const ex = geom.exclusionRect
-
-        floating.forEach((id, idx) => {
-          const p = curPhysics[id]
-          const d = DRIFT_CONFIG[id] || { T1: 8, phi1: 0, T2: 11, phi2: 0 }
-          const baseX = (idx - 1) * 70
-          const baseY = (ex.top - geom.iconRadius - 16) - geom.slotCenterY
-          p.x = baseX + 4 * Math.sin(timeSec / d.T1 + d.phi1)
-          p.y = baseY + 3 * Math.cos(timeSec / d.T2 + d.phi2)
+        state.floatingSlots.forEach((id, idx) => {
+          const p = physics[id]
+          const dCfg = DRIFT_CONFIG[id] || { T1: 8, phi1: 0, T2: 11, phi2: 0 }
+          const baseX = (idx - 1) * 75
+          const baseY = (geom.exclusionRect.top - geom.iconRadius - 16) - geom.slotCenterY
+          p.x = baseX + 4 * Math.sin(tSec / dCfg.T1 + dCfg.phi1)
+          p.y = baseY + 3 * Math.cos(tSec / dCfg.T2 + dCfg.phi2)
         })
       }
 
-      // Update DOM styles directly for silky 60fps
-      s.floatingBadges.forEach((id) => {
-        const el = document.getElementById(`orb-${id}`)
-        if (el) {
-          const p = s.physics[id]
-          const isEntering = s.phase === 'COMET' && id === s.incomingBadge
-          el.style.transform = `translate3d(${p.x.toFixed(2)}px, ${p.y.toFixed(2)}px, 0)`
-          el.style.opacity = (fadingOrb === id) ? '0' : '1'
-          el.style.zIndex = isEntering ? '35' : '10'
+      // --- OPACITY & DOM UPDATES ---
+      const isDimmed = state.phase === 'CHARGE' || state.phase === 'COMET' || state.phase === 'IMPACT' || state.phase === 'SETTLE' || state.phase === 'READ' || state.phase === 'PULSE'
+      const targetFloatingOpacity = isDimmed ? 0.5 : 0.85
+      const hoverLights = []
+
+      BADGES.forEach((id) => {
+        const el = badgeDomRefs.current[id]
+        if (!el) return
+
+        const isCurrentActive = id === state.currentActiveId
+        const isIncoming = id === state.incomingId
+        const isReturning = id === state.returningId
+        const p = physics[id]
+
+        if (isCurrentActive) {
+          el.style.opacity = '0'
+          p.opacity = 0
+          p.scale = 1
+          el.style.pointerEvents = 'none'
+          return
+        }
+
+        el.style.pointerEvents = 'auto'
+
+        let op = targetFloatingOpacity
+        let sc = 1.0
+
+        if (isIncoming && state.phase === 'CHARGE') {
+          op = 1.0
+          sc = 1.14
+        } else if (isIncoming && state.phase === 'COMET') {
+          op = 1.0
+          sc = p.scale
+        } else if (isReturning && state.phase === 'SETTLE') {
+          op = state.returningOpacity
+        }
+
+        p.opacity += (op - p.opacity) * 0.15
+        p.scale += (sc - p.scale) * 0.15
+
+        // Bottom edge gradient: orbs smoothly fade out approaching bottom edge
+        const screenY = geom.slotCenterY + p.y
+        const distFromBottom = geom.height - screenY
+        const BOTTOM_FADE_MARGIN = Math.max(220, Math.min(320, geom.height * 0.3))
+        const bottomFactor = Math.min(1, Math.max(0, distFromBottom / BOTTOM_FADE_MARGIN))
+        const bottomGradient = 0.5 - 0.5 * Math.cos(bottomFactor * Math.PI)
+        const effectiveOpacity = p.opacity * bottomGradient
+
+        el.style.transform = `translate3d(${p.x.toFixed(2)}px, ${p.y.toFixed(2)}px, 0) scale(${p.scale.toFixed(3)})`
+        el.style.opacity = `${effectiveOpacity.toFixed(3)}`
+
+        if (effectiveOpacity > 0.08) {
+          hoverLights.push({
+            x: geom.slotCenterX + p.x,
+            y: geom.slotCenterY + p.y,
+            moving: !isHalted,
+          })
         }
       })
+
+      if (rippleRef.current) {
+        rippleRef.current.setHoverLights(hoverLights, isDimmed ? 0.4 : 1.0)
+      }
 
       animId = requestAnimationFrame(loop)
     }
@@ -520,109 +716,199 @@ export default function OrbitStage({ onMounted, animationReady = true }) {
     animId = requestAnimationFrame(loop)
     return () => {
       if (animId) cancelAnimationFrame(animId)
-      document.removeEventListener('visibilitychange', handleVisibility)
     }
-  }, [fadingOrb])
+  }, [reducedMotion])
 
-  const centerConfig = PLATFORM_CONFIG[centerBadge] || PLATFORM_CONFIG.skills
-  const CenterIcon = centerConfig.icon
+  const activeConfig = activeStageId ? PLATFORM_CONFIG[activeStageId] : null
+  const exitingConfig = exitingStageId ? PLATFORM_CONFIG[exitingStageId] : null
 
   return (
-    <div
-      ref={stageRef}
-      className="relative w-full h-[100svh] min-h-[100svh] overflow-hidden bg-[#000000] text-white flex flex-col justify-between items-center select-none"
+    <main
+      ref={containerRef}
+      className="relative w-screen h-[100svh] min-h-[100svh] overflow-hidden bg-[#0a0a0a] text-white flex flex-col items-center justify-center select-none font-sans"
+      style={{
+        paddingTop: 'env(safe-area-inset-top, 0px)',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        overscrollBehavior: 'none',
+      }}
     >
-      {/* Background Water Ripple Canvas */}
-      <div className="absolute inset-0 pointer-events-auto z-0">
-        <WaterRippleCanvas ref={canvasRef} />
-      </div>
+      {/* Background Reacting Dot Grid Canvas */}
+      <WaterRippleCanvas ref={rippleRef} className="z-0 pointer-events-auto" />
 
-      {/* Screen 2 Content & Orbit Layer */}
-      <div className="relative z-20 flex-1 flex flex-col items-center justify-center w-full max-w-xl px-4 py-8 pointer-events-none">
-        
-        {/* Heading: "Do you have" */}
-        <div ref={headingRef} className="text-center mb-6 pointer-events-auto">
-          <p className="text-sm uppercase tracking-widest text-white/40 font-semibold mb-1">
-            Proven engineering telemetry
-          </p>
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-white">
-            Do you have
-          </h2>
-        </div>
+      {/* Orbit Track Layer (floating orbs + comet tail) */}
+      <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+        {/* Comet Tail */}
+        <div
+          ref={cometTailRef}
+          aria-hidden="true"
+          className="absolute h-1.5 rounded-full pointer-events-none opacity-0 transition-opacity duration-200"
+          style={{
+            left: '50%',
+            top: '50%',
+            marginTop: '-3px',
+            height: '3px',
+            background: 'linear-gradient(90deg, rgba(56,189,248,0.85) 0%, rgba(56,189,248,0.2) 60%, transparent 100%)',
+            boxShadow: '0 0 12px rgba(56,189,248,0.5)',
+          }}
+        />
 
-        {/* Orbit container around Center Slot */}
-        <div className="relative flex items-center justify-center my-6">
-          {/* Floating Orbiting Orbs */}
-          {BADGES.map((id) => {
-            const config = PLATFORM_CONFIG[id]
-            const IconComp = config.icon
-            const isCenter = id === centerBadge
-            if (isCenter) return null
-
+        {!reducedMotion &&
+          BADGES.map((id) => {
+            const cfg = PLATFORM_CONFIG[id]
+            const Icon = cfg.icon
             return (
-              <div
+              <button
                 key={id}
-                id={`orb-${id}`}
-                className="absolute top-1/2 left-1/2 -ml-6 -mt-6 w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center border border-white/20 bg-[#0d0d12]/90 backdrop-blur-md shadow-lg pointer-events-auto transition-opacity duration-300 will-change-transform"
-                style={{
-                  boxShadow: `0 0 24px ${config.color}20`,
+                type="button"
+                ref={(el) => {
+                  badgeDomRefs.current[id] = el
                 }}
+                onClick={() => {
+                  toast(`${cfg.name} Integration`, {
+                    description: `${cfg.targetPercent}% of top tech companies evaluate candidates using ${cfg.name}.`,
+                  })
+                }}
+                aria-label={cfg.name}
+                style={{
+                  left: '50%',
+                  top: '50%',
+                  marginLeft: '-27px',
+                  marginTop: '-27px',
+                  boxShadow: `0 0 18px ${cfg.color}88, 0 0 39px ${cfg.color}44, 0 10px 22px rgba(0,0,0,0.55)`,
+                }}
+                className="absolute w-[54px] h-[54px] rounded-full bg-slate-900/85 backdrop-blur-xl shadow-2xl border border-white/25 flex items-center justify-center pointer-events-auto cursor-pointer will-change-transform active:scale-[0.92]"
               >
-                <IconComp size={24} color={config.color} />
-              </div>
+                <Icon size={26} color={cfg.color} />
+              </button>
             )
           })}
+      </div>
 
-          {/* Center Orb Slot */}
-          <div
-            ref={slotRef}
-            className="relative z-30 w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center border-2 border-white/30 bg-[#12121a]/95 backdrop-blur-xl shadow-2xl pointer-events-auto"
-            style={{
-              boxShadow: `0 0 36px ${centerConfig.color}40`,
-            }}
-          >
-            <CenterIcon
-              size={32}
-              color={centerConfig.color}
-              className={`transition-all duration-300 ${isTextFading ? 'scale-90 opacity-40' : 'scale-100 opacity-100'}`}
+      {/* Center Stage & Content Stack (Exclusion Area) */}
+      <div className="relative z-20 flex flex-col items-center text-center max-w-sm px-4 pointer-events-auto">
+        {/* 1. Heading "Do you have" */}
+        <h1
+          ref={headingRef}
+          className="text-[clamp(28px,6vmin,54px)] font-extrabold tracking-tight text-white leading-tight drop-shadow-md select-none"
+        >
+          Do you have
+        </h1>
+
+        {/* 2. Center orb slot */}
+        <div ref={centerSlotRef} className="h-20 w-20 my-3 flex items-center justify-center relative">
+          {pulseRingActive && (
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 rounded-full border border-sky-400 pointer-events-none animate-dock-pulse"
             />
-          </div>
-        </div>
+          )}
 
-        {/* Stat Caption */}
-        <div ref={captionRef} className="text-center my-4 min-h-[56px] pointer-events-auto">
-          <div
-            key={captionKey}
-            className={`transition-opacity duration-300 ${isTextFading ? 'opacity-0' : 'opacity-100'}`}
-          >
-            <div className="text-2xl sm:text-3xl font-black text-white">
-              {displayedPercent}% verified match
+          {/* Outgoing center icon fading in-place */}
+          {exitingConfig && (
+            <div
+              style={{
+                opacity: exitingOpacity,
+                boxShadow: `0 0 26px ${exitingConfig.color}99, 0 0 58px ${exitingConfig.color}55, 0 12px 28px rgba(0,0,0,0.55)`,
+              }}
+              className="absolute w-[66px] h-[66px] rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/25 flex items-center justify-center pointer-events-none"
+            >
+              {React.createElement(exitingConfig.icon, { size: 30, color: exitingConfig.color })}
             </div>
-            <p className="text-xs sm:text-sm text-white/50 tracking-wide mt-1">
-              {centerConfig.name} activity cryptographic verification
-            </p>
-          </div>
+          )}
+
+          {/* Active Center Icon with calibrated colored orb glow */}
+          {activeConfig ? (
+            <div
+              style={{
+                boxShadow: `0 0 26px ${activeConfig.color}99, 0 0 58px ${activeConfig.color}55, 0 12px 28px rgba(0,0,0,0.55)`,
+              }}
+              className="w-[66px] h-[66px] rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/25 flex items-center justify-center pointer-events-auto"
+            >
+              {React.createElement(activeConfig.icon, { size: 30, color: activeConfig.color })}
+            </div>
+          ) : (
+            <div className="w-14 h-14 rounded-full border-2 border-dashed border-slate-700" />
+          )}
         </div>
 
-        {/* Primary CTA Button: "Get a job you'll love" */}
-        <div ref={ctaRef} className="mt-4 pointer-events-auto">
-          <Link
-            to="/auth"
-            className={`relative inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-full font-semibold text-sm sm:text-base text-black bg-white hover:bg-white/90 transition-all duration-300 shadow-xl overflow-hidden group ${
-              isCtaShimmering ? 'ring-2 ring-white ring-offset-2 ring-offset-black' : ''
-            }`}
-          >
-            <span>Get a job you'll love</span>
-            <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-            <span
-              className={`absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent -translate-x-full ${
-                isCtaShimmering ? 'animate-shimmer' : ''
+        {/* Stat caption under center orb slot */}
+        <div ref={captionRef} aria-live="polite" className="h-14 flex flex-col items-center justify-center overflow-visible">
+          {activeConfig && textPhase !== 'hidden' ? (
+            <div
+              className={`flex flex-col items-center will-change-transform ${
+                textPhase === 'exiting' ? 'animate-text-fade-out' : ''
               }`}
-            />
+            >
+              <span className="text-xs uppercase font-bold tracking-wider text-slate-400">
+                {textPhase === 'entering' ? (
+                  <AnimatedChars text={activeConfig.label} baseDelay={0} speed={25} />
+                ) : (
+                  activeConfig.label
+                )}
+              </span>
+              <p className="text-[clamp(14px,2.2vmin,18px)] font-medium text-slate-300 mt-0.5">
+                <span className="font-bold text-white tabular-nums inline-block min-w-[2.5ch] text-right">
+                  {displayCount}%
+                </span>{' '}
+                {textPhase === 'entering' ? (
+                  <AnimatedChars
+                    text={`of companies hire through ${activeConfig.label.toLowerCase()}`}
+                    baseDelay={80}
+                    speed={16}
+                  />
+                ) : (
+                  `of companies hire through ${activeConfig.label.toLowerCase()}`
+                )}
+              </p>
+            </div>
+          ) : (
+            <div className="h-8" />
+          )}
+        </div>
+
+        {/* 3. White button "Get a job you'll love" with CTA text shimmer */}
+        <Link
+          ref={buttonRef}
+          to="/auth"
+          className="relative overflow-hidden mt-6 inline-flex items-center justify-center min-w-[170px] min-h-[48px] px-8 py-3 rounded-xl bg-white text-slate-950 font-semibold text-base shadow-[0_0_0_1px_rgba(255,255,255,0.35)] active:scale-[0.97] transition-colors duration-200 ease-out hover:bg-slate-100 touch-manipulation select-none"
+        >
+          <span className="grid grid-cols-1 grid-rows-1 items-center justify-center text-center [&>*]:col-start-1 [&>*]:row-start-1">
+            <span
+              className={`font-semibold text-base tracking-normal select-none ${
+                reducedMotion && ctaShimmerActive
+                  ? 'animate-cta-reduced-color'
+                  : 'text-slate-950 opacity-100'
+              }`}
+            >
+              Get a job you'll love
+            </span>
+
+            {!reducedMotion && (
+              <span
+                key={ctaShimmerCycle}
+                aria-hidden="true"
+                className={`font-semibold text-base tracking-normal pointer-events-none select-none cta-text-shimmer ${
+                  ctaShimmerActive ? 'cta-text-shimmer-active' : ''
+                }`}
+              >
+                Get a job you'll love
+              </span>
+            )}
+          </span>
+        </Link>
+
+        {/* 4. Secondary Sign in link below button */}
+        <div ref={signInRef} className="mt-4 flex items-center justify-center gap-1.5 text-sm text-slate-400">
+          <span>Already have an account?</span>
+          <Link
+            to="/auth?mode=signin"
+            className="font-medium text-slate-200 hover:text-white underline underline-offset-4 decoration-slate-600 hover:decoration-slate-300 transition-colors duration-150"
+          >
+            Sign in
           </Link>
         </div>
 
-        {/* The Three Trust Ticks */}
+        {/* 5. Three Trust Ticks */}
         <div
           ref={ticksRef}
           className={`flex ${
@@ -643,27 +929,6 @@ export default function OrbitStage({ onMounted, animationReady = true }) {
           </div>
         </div>
       </div>
-
-      {/* Minimal Footer Line */}
-      <footer
-        ref={footerRef}
-        className="relative z-20 w-full py-4 px-6 border-t border-white/5 flex flex-wrap items-center justify-between gap-4 text-xs text-white/35 pointer-events-auto"
-      >
-        <div className="flex items-center gap-4">
-          <Link to="/about" className="hover:text-white/70 transition-colors">
-            About
-          </Link>
-          <Link to="/about" className="hover:text-white/70 transition-colors">
-            Privacy policy
-          </Link>
-          <Link to="/about" className="hover:text-white/70 transition-colors">
-            Terms of service
-          </Link>
-        </div>
-        <p className="text-right">
-          &copy; {new Date().getFullYear()}. All rights reserved.
-        </p>
-      </footer>
-    </div>
+    </main>
   )
 }
