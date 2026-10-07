@@ -61,13 +61,13 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
     },
   }))
 
-  const displaceAtCoord = (clientX, clientY, force = 12) => {
+  const displaceAtCoord = (clientX, clientY, force = 16) => {
     const canvas = canvasRef.current
     if (!canvas) return
     const rect = canvas.getBoundingClientRect()
     const x = clientX - rect.left
     const y = clientY - rect.top
-    const blastRadius = 40
+    const blastRadius = 65
     const dots = dotsRef.current
     for (let i = 0; i < dots.length; i++) {
       const dot = dots[i]
@@ -75,7 +75,7 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
       const dy = dot.oy - y
       const dist = Math.sqrt(dx * dx + dy * dy)
       if (dist < blastRadius && dist > 0.01) {
-        const factor = (1 - dist / blastRadius) * force
+        const factor = (1 - dist / blastRadius) * force * 1.4
         dot.vx += (dx / dist) * factor
         dot.vy += (dy / dist) * factor
       }
@@ -89,23 +89,23 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
     const x = clientX !== undefined ? clientX - rect.left : rect.width / 2
     const y = clientY !== undefined ? clientY - rect.top : rect.height / 2
 
-    // Calibrated soft ripple: peak radius ~220px, settles within ~900ms
-    const intensity = options.intensity ?? 105
-    const waveSpeed = options.speed ?? 270
-    const waveWidth = options.width ?? 54
-    const maxRadius = Math.min(360, options.maxRadius ?? 330)
-    const blastRadius = options.blastRadius ?? 90
+    // Calibrated high-impact fluid particle ripple
+    const intensity = options.intensity ?? 135
+    const waveSpeed = options.speed ?? 285
+    const waveWidth = options.width ?? 62
+    const maxRadius = Math.min(420, options.maxRadius ?? 360)
+    const blastRadius = options.blastRadius ?? 140
 
     wavesRef.current.push({
       x,
       y,
-      radius: 12,
+      radius: 14,
       speed: waveSpeed,
       maxRadius,
       intensity,
       width: waveWidth,
-      life: 1.0,
-      decay: 1.15, // Wave fully expires within ~900ms
+      life: 1.1,
+      decay: 1.05,
     })
 
     const dots = dotsRef.current
@@ -117,7 +117,8 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
 
       if (dist < blastRadius && dist > 0.001) {
         const factor = Math.max(0, 1 - dist / blastRadius)
-        const force = factor * (intensity * 0.16)
+        // High particle impact force
+        const force = factor * (intensity * 0.38)
         dot.vx += (dx / dist) * force
         dot.vy += (dy / dist) * force
       }
@@ -138,10 +139,10 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
     let dpr = Math.min(window.devicePixelRatio || 1, 2)
 
     const SPACING = Math.max(22, Math.min(28, Math.floor(Math.min(width, height) / 32)))
-    const BASE_DOT_RADIUS = 1.3
-    const BASE_K = 30
-    const BASE_C = 7
-    const MAX_DISP = 14
+    const BASE_DOT_RADIUS = 2.2
+    const BASE_K = 28
+    const BASE_C = 6.2
+    const MAX_DISP = 28
     const MAX_DISP_SQ = MAX_DISP * MAX_DISP
 
     const initGrid = () => {
@@ -227,8 +228,8 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
             const distanceAttenuation = 1 / (1 + dist * 0.004)
             const impulse = w.intensity * radialFalloff * distanceAttenuation
 
-            dot.vx += (dx / dist) * impulse * dt * 12
-            dot.vy += (dy / dist) * impulse * dt * 12
+            dot.vx += (dx / dist) * impulse * dt * 26
+            dot.vy += (dy / dist) * impulse * dt * 26
           }
         }
 
@@ -266,7 +267,8 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
       ctx.fillStyle = '#0a0a0a'
       ctx.fillRect(0, 0, width, height)
 
-      const LIGHT_RADIUS = 28
+      // Reduced orb glow/light radius by 40% (28 -> 17px)
+      const LIGHT_RADIUS = 17
       const LIGHT_RADIUS_SQ = LIGHT_RADIUS * LIGHT_RADIUS
 
       for (let i = 0; i < dots.length; i++) {
@@ -301,14 +303,14 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
           }
         }
 
-        // Strict alpha cap at 0.55 and radius growth at +0.35px
-        const alpha = 0.35 + 0.20 * energy
-        const radius = BASE_DOT_RADIUS + 0.35 * energy
+        // Enlarged luminous fluid particle dots with stronger energy response
+        const alpha = Math.min(0.92, 0.42 + 0.50 * energy)
+        const radius = BASE_DOT_RADIUS + 1.25 * energy
 
         ctx.fillStyle =
-          energy > 0.08
-            ? `rgba(${Math.round(200 + 35 * energy)}, ${Math.round(210 + 30 * energy)}, 255, ${alpha.toFixed(3)})`
-            : 'rgba(180, 185, 195, 0.35)'
+          energy > 0.06
+            ? `rgba(${Math.round(215 + 40 * energy)}, ${Math.round(225 + 30 * energy)}, 255, ${alpha.toFixed(3)})`
+            : 'rgba(185, 195, 210, 0.42)'
 
         ctx.beginPath()
         ctx.arc(dot.x, dot.y, radius, 0, Math.PI * 2)

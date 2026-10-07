@@ -126,6 +126,7 @@ export default function LandingPage() {
     lastSettleCheck: 0,
     pulseStage: 0, // 0 = not started, 1 = pulse 1, 2 = gap, 3 = pulse 2
     pulseStartTime: 0,
+    waitingIncomingId: null,
   })
 
   // Persistent orbit slot per badge (0..2). A badge keeps its slot for its
@@ -176,8 +177,9 @@ export default function LandingPage() {
         slotRect = slotEl.getBoundingClientRect()
       }
 
-      const iconRadius = vw < 360 ? 24 : vw < 480 ? 30 : 36
-      const pad = vw < 360 ? 16 : vw < 480 ? 24 : 32
+      // Reduced orb radius by ~40% (36px -> 27px)
+      const iconRadius = vw < 360 ? 18 : vw < 480 ? 22 : 27
+      const pad = vw < 360 ? 14 : vw < 480 ? 20 : 26
 
       const heroCenterX = heroRect.left + heroRect.width / 2
       const heroCenterY = heroRect.top + heroRect.height / 2
@@ -294,37 +296,74 @@ export default function LandingPage() {
           state.targetSpeed = baseSpeedRad
           const timeSinceLastCycle = now - state.lastCycleEndTime
 
-          // After >= 4s calm orbit, prepare to dock the next badge
-          if (timeSinceLastCycle >= 4000) {
+          // After >= 3.5s calm orbit, evaluate candidates in viewing zone
+          if (timeSinceLastCycle >= 3500) {
             const currentIdx = BADGES.indexOf(state.currentActiveId)
-            const incoming = BADGES[(currentIdx + 1) % BADGES.length]
+            const nextStoryCandidate = BADGES[(currentIdx + 1) % BADGES.length]
 
-            // Slot angle from the badge's persistent slot
-            const slotIdx = slotAssignRef.current[incoming] ?? floatingIds.indexOf(incoming)
-            const incomingAngle = (state.sharedPhase + slotIdx * ((2 * Math.PI) / 3)) % (2 * Math.PI)
+            const isBadgeInViewingZone = (id, margin = 24) => {
+              const p = physics[id]
+              if (!p) return false
+              const sx = geom.heroCenterX + p.x
+              const sy = geom.heroCenterY + p.y
+              const r = geom.iconRadius
+              return (
+                sx - r >= margin &&
+                sx + r <= window.innerWidth - margin &&
+                sy - r >= margin &&
+                sy + r <= window.innerHeight - margin
+              )
+            }
 
-            // Choose dock point: angle 0 (right) or PI (left)
-            const distTo0 = (2 * Math.PI - incomingAngle) % (2 * Math.PI)
-            const distToPI = (3 * Math.PI - incomingAngle) % (2 * Math.PI)
-            const targetDockAngle = distTo0 <= distToPI ? 0 : Math.PI
-            const angleNeeded = targetDockAngle === 0 ? distTo0 : distToPI
+            const isAngleInViewingZone = (theta, margin = 24) => {
+              const sx = geom.heroCenterX + Math.cos(theta) * geom.rx
+              const sy = geom.heroCenterY + Math.sin(theta) * geom.ry
+              const r = geom.iconRadius
+              return (
+                sx - r >= margin &&
+                sx + r <= window.innerWidth - margin &&
+                sy - r >= margin &&
+                sy + r <= window.innerHeight - margin
+              )
+            }
 
-            // Only start braking when the badge is close enough to a dock
-            // axis that it can glide there with an ease-out whose initial
-            // velocity matches the current orbital speed — no sudden speed
-            // change, and it stops exactly on the dock axis. Until then,
-            // keep cruising in HOLD.
-            const v0 = Math.max(state.currentSpeed, baseSpeedRad)
-            const brakeDurationSec = (2 * angleNeeded) / v0
-            if (brakeDurationSec <= 3.5) {
-              state.incomingId = incoming
-              state.dockSide = targetDockAngle === 0 ? 'right' : 'left'
-              state.brakeStartAngle = incomingAngle
-              state.brakeDelta = angleNeeded
-              state.brakeDuration = brakeDurationSec * 1000
-              state.phase = 'BRAKE'
-              state.phaseStartTime = now
-              setDebugPhase('BRAKE')
+            const onScreenBadges = floatingIds.filter((id) => isBadgeInViewingZone(id))
+
+            let incoming = null
+            if (state.waitingIncomingId) {
+              // Waiting for a pre-selected icon to enter the viewing zone
+              if (isBadgeInViewingZone(state.waitingIncomingId)) {
+                incoming = state.waitingIncomingId
+              }
+            } else if (onScreenBadges.includes(nextStoryCandidate)) {
+              incoming = nextStoryCandidate
+            } else if (onScreenBadges.length > 0) {
+              incoming = onScreenBadges[0]
+            } else {
+              // None are on screen: select one and wait for it to enter the viewing zone
+              state.waitingIncomingId = nextStoryCandidate
+            }
+
+            if (incoming) {
+              const slotIdx = slotAssignRef.current[incoming] ?? floatingIds.indexOf(incoming)
+              const incomingAngle = (state.sharedPhase + slotIdx * ((2 * Math.PI) / 3)) % (2 * Math.PI)
+
+              const v0 = Math.max(state.currentSpeed, baseSpeedRad)
+              const brakeSec = 1.4
+              const brakeDelta = (v0 * brakeSec) / 2
+              const stopAngle = (incomingAngle + brakeDelta) % (2 * Math.PI)
+
+              // Verify the stopping position is also inside the viewing zone
+              if (isAngleInViewingZone(stopAngle) || onScreenBadges.length <= 1) {
+                state.incomingId = incoming
+                state.waitingIncomingId = null
+                state.brakeStartAngle = incomingAngle
+                state.brakeDelta = brakeDelta
+                state.brakeDuration = brakeSec * 1000
+                state.phase = 'BRAKE'
+                state.phaseStartTime = now
+                setDebugPhase('BRAKE')
+              }
             }
           }
           break
@@ -723,7 +762,9 @@ export default function LandingPage() {
             left: '50%',
             top: '50%',
             marginTop: '-3px',
-            background: 'linear-gradient(90deg, rgba(56,189,248,0.6) 0%, transparent 100%)',
+            height: '3px',
+            background: 'linear-gradient(90deg, rgba(56,189,248,0.85) 0%, rgba(56,189,248,0.2) 60%, transparent 100%)',
+            boxShadow: '0 0 12px rgba(56,189,248,0.5)',
           }}
         />
 
@@ -748,13 +789,13 @@ export default function LandingPage() {
                 style={{
                   left: '50%',
                   top: '50%',
-                  marginLeft: '-36px',
-                  marginTop: '-36px',
-                  boxShadow: `0 0 24px ${cfg.color}66, 0 0 52px ${cfg.color}33, 0 12px 30px rgba(0,0,0,0.6)`,
+                  marginLeft: '-27px',
+                  marginTop: '-27px',
+                  boxShadow: `0 0 14px ${cfg.color}77, 0 0 30px ${cfg.color}33, 0 8px 20px rgba(0,0,0,0.5)`,
                 }}
-                className="absolute w-[72px] h-[72px] rounded-full bg-slate-900/85 backdrop-blur-xl shadow-2xl border border-white/25 flex items-center justify-center pointer-events-auto cursor-pointer will-change-transform active:scale-[0.92]"
+                className="absolute w-[54px] h-[54px] rounded-full bg-slate-900/85 backdrop-blur-xl shadow-2xl border border-white/25 flex items-center justify-center pointer-events-auto cursor-pointer will-change-transform active:scale-[0.92]"
               >
-                <Icon size={34} color={cfg.color} />
+                <Icon size={26} color={cfg.color} />
               </button>
             )
           })}
@@ -769,7 +810,7 @@ export default function LandingPage() {
           Do you have
         </h1>
 
-        <div ref={centerSlotRef} className="h-24 w-24 my-3 flex items-center justify-center relative">
+        <div ref={centerSlotRef} className="h-20 w-20 my-3 flex items-center justify-center relative">
           {/* Slot landing pulse ring */}
           {pulseRingActive && (
             <div
@@ -783,23 +824,23 @@ export default function LandingPage() {
             <div
               style={{
                 opacity: exitingOpacity,
-                boxShadow: `0 0 35px ${exitingConfig.color}88, 0 0 75px ${exitingConfig.color}44, 0 15px 35px rgba(0,0,0,0.6)`,
+                boxShadow: `0 0 20px ${exitingConfig.color}88, 0 0 45px ${exitingConfig.color}44, 0 10px 25px rgba(0,0,0,0.5)`,
               }}
-              className="absolute w-[84px] h-[84px] rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/25 flex items-center justify-center pointer-events-none"
+              className="absolute w-[66px] h-[66px] rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/25 flex items-center justify-center pointer-events-none"
             >
-              {React.createElement(exitingConfig.icon, { size: 38, color: exitingConfig.color })}
+              {React.createElement(exitingConfig.icon, { size: 30, color: exitingConfig.color })}
             </div>
           )}
 
-          {/* Active Center Icon with prominent colored orb glow */}
+          {/* Active Center Icon with calibrated colored orb glow */}
           {activeConfig ? (
             <div
               style={{
-                boxShadow: `0 0 35px ${activeConfig.color}88, 0 0 75px ${activeConfig.color}44, 0 15px 35px rgba(0,0,0,0.6)`,
+                boxShadow: `0 0 20px ${activeConfig.color}88, 0 0 45px ${activeConfig.color}44, 0 10px 25px rgba(0,0,0,0.5)`,
               }}
-              className="w-[84px] h-[84px] rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/25 flex items-center justify-center"
+              className="w-[66px] h-[66px] rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/25 flex items-center justify-center"
             >
-              {React.createElement(activeConfig.icon, { size: 38, color: activeConfig.color })}
+              {React.createElement(activeConfig.icon, { size: 30, color: activeConfig.color })}
             </div>
           ) : (
             <div className="w-14 h-14 rounded-full border-2 border-dashed border-slate-700" />
