@@ -45,9 +45,13 @@ const DEBUG_SLOWMO = 1
 export default function LandingPage() {
   const [activeStageId, setActiveStageId] = useState('github')
   const [exitingStageId, setExitingStageId] = useState(null)
+  const [isSlamming, setIsSlamming] = useState(false)
   const [displayCount, setDisplayCount] = useState(PLATFORM_CONFIG.github.targetPercent)
   const [reducedMotion, setReducedMotion] = useState(false)
   const [badgeRadius, setBadgeRadius] = useState(200)
+
+  const rippleRef = useRef(null)
+  const centerSlotRef = useRef(null)
 
   const anglesRef = useRef({
     github: 0,
@@ -68,6 +72,7 @@ export default function LandingPage() {
   const stageLockRef = useRef(false)
   const animationFrameRef = useRef(null)
   const countIntervalRef = useRef(null)
+  const wakeThrottleRef = useRef(0)
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -89,7 +94,7 @@ export default function LandingPage() {
     return () => window.removeEventListener('resize', calcRadius)
   }, [])
 
-  // Orbit animation loop
+  // Orbit animation loop with wake generation
   useEffect(() => {
     if (reducedMotion) return
     let lastTime = performance.now()
@@ -101,11 +106,28 @@ export default function LandingPage() {
 
       if (document.visibilityState === 'visible') {
         const next = { ...anglesRef.current }
+        const centerX = window.innerWidth / 2
+        const centerY = window.innerHeight / 2
+
+        wakeThrottleRef.current += 1
+        const emitWake = wakeThrottleRef.current % 4 === 0
+
         BADGES.forEach((id) => {
           if (orbiting[id]) {
             next[id] = (next[id] + speed * delta) % 360
+            if (emitWake && rippleRef.current) {
+              const deg = next[id]
+              const rad = ((deg - 90) * Math.PI) / 180
+              const bx = centerX + Math.cos(rad) * badgeRadius
+              const by = centerY + Math.sin(rad) * badgeRadius
+              // Tangential direction for wake ripple
+              const vx = -Math.sin(rad) * 1.5
+              const vy = Math.cos(rad) * 1.5
+              rippleRef.current.addWake(bx, by, vx, vy, 0.7)
+            }
           }
         })
+
         anglesRef.current = next
         setAngles({ ...next })
       }
@@ -114,9 +136,9 @@ export default function LandingPage() {
 
     animationFrameRef.current = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(animationFrameRef.current)
-  }, [reducedMotion, orbiting])
+  }, [reducedMotion, orbiting, badgeRadius])
 
-  // Scheduler logic
+  // Scheduler logic for slamming with velocity
   useEffect(() => {
     if (reducedMotion) {
       setActiveStageId('skills')
@@ -157,6 +179,21 @@ export default function LandingPage() {
 
       setOrbiting((prev) => ({ ...prev, [closest]: false }))
       setActiveStageId(closest)
+      setIsSlamming(true)
+
+      // Trigger fluid impact & carved crater at moment of contact (~310ms into animation)
+      setTimeout(() => {
+        if (centerSlotRef.current && rippleRef.current) {
+          const rect = centerSlotRef.current.getBoundingClientRect()
+          const cx = rect.left + rect.width / 2
+          const cy = rect.top + rect.height / 2
+          rippleRef.current.triggerSlam(cx, cy, { intensity: 480, carveRadius: 36 })
+        }
+      }, 310 * DEBUG_SLOWMO)
+
+      setTimeout(() => {
+        setIsSlamming(false)
+      }, 500 * DEBUG_SLOWMO)
 
       const target = PLATFORM_CONFIG[closest].targetPercent
       let current = 0
@@ -173,14 +210,14 @@ export default function LandingPage() {
         }
       }, stepTime)
 
-      const cooldown = Math.floor(5000 + Math.random() * 6000) * DEBUG_SLOWMO
+      const cooldown = Math.floor(5200 + Math.random() * 5000) * DEBUG_SLOWMO
       timer = setTimeout(() => {
         stageLockRef.current = false
         popNext()
       }, cooldown)
     }
 
-    const firstTimer = setTimeout(popNext, 5000 * DEBUG_SLOWMO)
+    const firstTimer = setTimeout(popNext, 4500 * DEBUG_SLOWMO)
 
     return () => {
       active = false
@@ -202,7 +239,7 @@ export default function LandingPage() {
       }}
     >
       {/* ── Interactive Water Ripple Surface Canvas ── */}
-      <WaterRippleCanvas className="z-0" />
+      <WaterRippleCanvas ref={rippleRef} className="z-0" />
 
       {/* ── Ambient Orbit Ring ── */}
       <div
@@ -243,7 +280,7 @@ export default function LandingPage() {
           </h1>
 
           {/* Reserved Stage Slot */}
-          <div className="h-16 w-16 my-3 flex items-center justify-center relative">
+          <div ref={centerSlotRef} className="h-16 w-16 my-3 flex items-center justify-center relative">
             {exitingConfig && (
               <div
                 className="absolute w-14 h-14 rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/20 flex items-center justify-center transition-all"
@@ -260,12 +297,18 @@ export default function LandingPage() {
 
             {activeConfig ? (
               <div
-                className="w-14 h-14 rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/20 flex items-center justify-center transition-transform"
-                style={{
-                  transform: 'scale(1)',
-                  transitionDuration: `${260 * DEBUG_SLOWMO}ms`,
-                  transitionTimingFunction: 'cubic-bezier(0.23, 1, 0.32, 1)',
-                }}
+                className={`w-14 h-14 rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/20 flex items-center justify-center ${
+                  isSlamming ? 'animate-icon-slam' : 'transition-transform'
+                }`}
+                style={
+                  !isSlamming
+                    ? {
+                        transform: 'scale(1)',
+                        transitionDuration: `${260 * DEBUG_SLOWMO}ms`,
+                        transitionTimingFunction: 'cubic-bezier(0.23, 1, 0.32, 1)',
+                      }
+                    : undefined
+                }
               >
                 {React.createElement(activeConfig.icon, { size: 26, color: activeConfig.color })}
               </div>

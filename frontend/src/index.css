@@ -720,14 +720,32 @@ a:not(:disabled):active,
   }
 }
 
-@keyframes slam {
-  0% { transform: scale(1.75); opacity: 0; filter: blur(4px); }
-  60% { transform: scale(0.92); opacity: 1; filter: blur(0); }
-  100% { transform: scale(1); opacity: 1; }
+@keyframes icon-slam {
+  0% {
+    transform: translateY(-90px) scale(2.4) translateZ(0);
+    opacity: 0.2;
+    filter: blur(8px);
+  }
+  65% {
+    transform: translateY(0px) scale(0.82, 1.18) translateZ(0);
+    opacity: 1;
+    filter: blur(0px);
+  }
+  78% {
+    transform: translateY(0px) scale(1.18, 0.84) translateZ(0);
+  }
+  90% {
+    transform: translateY(0px) scale(0.96, 1.04) translateZ(0);
+  }
+  100% {
+    transform: translateY(0px) scale(1, 1) translateZ(0);
+    opacity: 1;
+  }
 }
 
-.animate-slam {
-  animation: slam 350ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+.animate-icon-slam {
+  animation: icon-slam 480ms cubic-bezier(0.12, 0.8, 0.25, 1) forwards;
+  will-change: transform, opacity, filter;
 }
 
 /* Mobile-Native: Gate hover states behind pointer capability */
