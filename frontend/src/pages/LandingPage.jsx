@@ -46,6 +46,7 @@ export default function LandingPage() {
   const [activeStageId, setActiveStageId] = useState('github')
   const [exitingStageId, setExitingStageId] = useState(null)
   const [isSlamming, setIsSlamming] = useState(false)
+  const [buttonShimmer, setButtonShimmer] = useState(false)
   const [displayCount, setDisplayCount] = useState(PLATFORM_CONFIG.github.targetPercent)
   const [reducedMotion, setReducedMotion] = useState(false)
   const [badgeRadius, setBadgeRadius] = useState(240)
@@ -71,7 +72,13 @@ export default function LandingPage() {
   const orbitingRef = useRef(orbiting)
   orbitingRef.current = orbiting
 
-  const animationFrameRef = useRef(null)
+    const handleSplash = () => {
+    setTimeout(() => {
+      setButtonShimmer(true)
+      setTimeout(() => setButtonShimmer(false), 900)
+    }, 3000)
+  }
+const animationFrameRef = useRef(null)
   const countIntervalRef = useRef(null)
   const wakeThrottleRef = useRef(0)
 
@@ -224,7 +231,7 @@ export default function LandingPage() {
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       }}
     >
-      <WaterRippleCanvas ref={rippleRef} className="z-0" />
+      <WaterRippleCanvas ref={rippleRef} onSlam={handleSplash} className="z-0" />
 
       {/* Orbit Layer */}
       <div
@@ -326,9 +333,17 @@ export default function LandingPage() {
 
         <Link
           to="/auth"
-          className="mt-6 inline-flex items-center justify-center min-h-[48px] px-8 py-3 rounded-xl bg-white text-slate-950 font-semibold text-base shadow-xl shadow-black/50 active:scale-[0.97] transition-all duration-150 ease-out hover:bg-slate-100 touch-manipulation select-none"
+          className={`relative overflow-hidden mt-6 inline-flex items-center justify-center min-h-[48px] px-8 py-3 rounded-xl bg-white text-slate-950 font-semibold text-base shadow-xl shadow-black/50 active:scale-[0.97] transition-all duration-150 ease-out hover:bg-slate-100 touch-manipulation select-none ${
+            buttonShimmer ? 'ring-2 ring-white/40 ring-offset-2 ring-offset-black' : ''
+          }`}
         >
-          Get a job
+          {buttonShimmer && (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 w-1/2 bg-gradient-to-r from-transparent via-black/20 to-transparent animate-btn-shimmer"
+            />
+          )}
+          <span className="relative z-10">Get a job</span>
         </Link>
       </div>
     </main>
