@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { profileApi } from '../services/api'
-import { User, GraduationCap, Target, Code2, Phone, MapPin, Loader2 } from 'lucide-react'
+import { User, GraduationCap, Target, Code2, Phone, MapPin, Loader2, Sparkles } from 'lucide-react'
 import { Linkedin, Github } from '../components/Icons'
 import { toast } from 'sonner'
 import { useAuth } from '../context/AuthContext'
+import AccountSearchInput from '../components/AccountSearchInput'
+
 
 export default function ProfilePage() {
   const { user } = useAuth()
@@ -114,33 +116,45 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Social Links */}
-        <div className="card p-6">
-          <h3 className="text-sm font-semibold text-slate-800 mb-4 flex items-center gap-2">
-            <Linkedin size={15} className="text-blue-600" /> Social & Platforms
-          </h3>
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1.5">LinkedIn Profile URL</label>
-              <div className="relative">
-                <Linkedin size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input name="linkedinUrl" value={form.linkedinUrl} onChange={handleChange} className="input pl-9" placeholder="https://linkedin.com/in/yourname" />
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1.5">GitHub Username</label>
-              <div className="relative">
-                <Github size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input name="githubUsername" value={form.githubUsername} onChange={handleChange} className="input pl-9" placeholder="your-github-username" />
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1.5">LeetCode Username</label>
-              <div className="relative">
-                <Code2 size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input name="leetcodeUsername" value={form.leetcodeUsername} onChange={handleChange} className="input pl-9" placeholder="your-leetcode-username" />
-              </div>
-            </div>
+        {/* Social Links & Platform Accounts */}
+        <div className="card p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+              <Linkedin size={15} className="text-blue-600" /> Social & Coding Accounts
+            </h3>
+            <span className="text-xs text-slate-400 flex items-center gap-1">
+              <Sparkles size={12} className="text-blue-500" /> Live search & verification
+            </span>
+          </div>
+
+          <div className="space-y-4">
+            <AccountSearchInput
+              platform="github"
+              label="GitHub Account (Search by username or real name)"
+              value={form.githubUsername}
+              placeholder="Type GitHub username or name to search..."
+              onChange={(val) => setForm(prev => ({ ...prev, githubUsername: val }))}
+              onSelectUser={(user) => {
+                setForm(prev => ({ ...prev, githubUsername: user.login }))
+                toast.success("Selected GitHub user @" + user.login)
+              }}
+            />
+
+            <AccountSearchInput
+              platform="leetcode"
+              label="LeetCode Account (Username)"
+              value={form.leetcodeUsername}
+              placeholder="Enter LeetCode username..."
+              onChange={(val) => setForm(prev => ({ ...prev, leetcodeUsername: val }))}
+            />
+
+            <AccountSearchInput
+              platform="linkedin"
+              label="LinkedIn Profile (URL or handle)"
+              value={form.linkedinUrl}
+              placeholder="https://linkedin.com/in/yourname or username"
+              onChange={(val) => setForm(prev => ({ ...prev, linkedinUrl: val }))}
+            />
           </div>
         </div>
 

@@ -4,6 +4,7 @@ import { leetcodeApi, profileApi } from '../services/api'
 import { Code2, RefreshCw, Loader2, Trophy } from 'lucide-react'
 import { RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer } from 'recharts'
 import { toast } from 'sonner'
+import AccountSearchInput from '../components/AccountSearchInput'
 
 export default function LeetCodePage() {
   const [data, setData] = useState(null)
@@ -46,15 +47,25 @@ export default function LeetCodePage() {
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="page-title">LeetCode Progress</h2>
           <p className="page-subtitle">Track your DSA and coding stats</p>
         </div>
-        <button onClick={handleSync} disabled={syncing} className="btn btn-primary">
-          {syncing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-          {syncing ? 'Syncing...' : data ? 'Refresh' : 'Fetch Stats'}
-        </button>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          <div className="w-full sm:w-60">
+            <AccountSearchInput
+              platform="leetcode"
+              value={username}
+              onChange={(val) => setUsername(val)}
+              placeholder="LeetCode username..."
+            />
+          </div>
+          <button onClick={handleSync} disabled={syncing || !username.trim()} className="btn btn-primary h-10 flex items-center justify-center gap-1.5 whitespace-nowrap">
+            {syncing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+            {syncing ? 'Syncing...' : data ? 'Refresh' : 'Fetch Stats'}
+          </button>
+        </div>
       </div>
 
       {!data ? (

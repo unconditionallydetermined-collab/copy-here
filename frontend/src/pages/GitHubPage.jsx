@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { githubApi, profileApi } from '../services/api'
 import { Star, GitFork, RefreshCw, Loader2, ExternalLink, Users, BookOpen } from 'lucide-react'
 import { Github } from '../components/Icons'
+import AccountSearchInput from '../components/AccountSearchInput'
 import { toast } from 'sonner'
 
 export default function GitHubPage() {
@@ -55,23 +56,29 @@ export default function GitHubPage() {
           <h2 className="page-title">GitHub Integration</h2>
           <p className="page-subtitle">Connect and sync public repository statistics</p>
         </div>
-        <form onSubmit={handleSync} className="flex items-center gap-2">
-          <input
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="GitHub username"
-            className="input text-sm px-3 py-1.5 w-48 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+          <div className="w-full sm:w-64">
+            <AccountSearchInput
+              platform="github"
+              value={username}
+              onChange={(val) => setUsername(val)}
+              onSelectUser={(u) => {
+                setUsername(u.login)
+                toast.success('Selected @' + u.login)
+              }}
+              placeholder="Search GitHub user or name..."
+            />
+          </div>
           <button
-            type="submit"
-            disabled={syncing}
-            className="btn btn-primary active:scale-[0.97] transition-transform duration-150"
+            type="button"
+            onClick={handleSync}
+            disabled={syncing || !username.trim()}
+            className="btn btn-primary active:scale-[0.97] transition-transform duration-150 h-10 flex items-center justify-center gap-1.5 whitespace-nowrap"
           >
             {syncing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
             {syncing ? 'Syncing...' : data ? 'Sync Again' : 'Connect'}
           </button>
-        </form>
+        </div>
       </div>
 
       {!data ? (
