@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
     "@splinetool/react-spline": "^4.1.0",
     "@splinetool/runtime": "^2.0.71",
     "@supabase/supabase-js": "^2.116.0",
@@ -18,7 +19,7 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-dropzone": "^20.1.2",
-        "react-is": "^19.3.0",
+    "react-is": "^19.3.0",
     "react-router-dom": "^7.18.4",
     "recharts": "^3.10.1",
     "sonner": "^2.0.8"

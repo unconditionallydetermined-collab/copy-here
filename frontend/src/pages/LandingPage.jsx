@@ -1,8 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { Link } from 'react-router-dom'
-import { Lightbulb, Code2, Check, ArrowRight, ShieldCheck, Terminal } from 'lucide-react'
-import { Github, Linkedin } from '../components/Icons'
+import { 
+  Check, 
+  ArrowRight, 
+  ShieldCheck, 
+  TerminalWindow, 
+  Code, 
+  Lightbulb, 
+  GithubLogo, 
+  LinkedinLogo,
+  CaretDown,
+  Sparkle
+} from '@phosphor-icons/react'
 import WaterRippleCanvas from '../components/WaterRippleCanvas'
 import FloatingIslandNav from '../components/FloatingIslandNav'
 import TaglineReveal from '../components/TaglineReveal'
@@ -14,7 +24,7 @@ const PLATFORM_CONFIG = {
     label: 'GitHub',
     targetPercent: 84.6,
     color: '#F8FAFC',
-    icon: Github,
+    icon: GithubLogo,
   },
   leetcode: {
     id: 'leetcode',
@@ -22,7 +32,7 @@ const PLATFORM_CONFIG = {
     label: 'LeetCode',
     targetPercent: 78.4,
     color: '#FFA116',
-    icon: Code2,
+    icon: Code,
   },
   linkedin: {
     id: 'linkedin',
@@ -30,7 +40,7 @@ const PLATFORM_CONFIG = {
     label: 'LinkedIn',
     targetPercent: 91.8,
     color: '#38BDF8',
-    icon: Linkedin,
+    icon: LinkedinLogo,
   },
   skills: {
     id: 'skills',
@@ -52,7 +62,6 @@ const DRIFT_CONFIG = {
 }
 
 export default function LandingPage() {
-  // Randomise initial center app
   const [initialRandomBadge] = useState(() => {
     const randomIndex = Math.floor(Math.random() * BADGES.length)
     return BADGES[randomIndex]
@@ -85,7 +94,6 @@ export default function LandingPage() {
     pad: 24,
   })
 
-  // Dynamic slot assignment based on initial random badge
   const slotAssignRef = useRef({
     github: 0,
     leetcode: 1,
@@ -116,7 +124,6 @@ export default function LandingPage() {
     cometStartY: 0,
   })
 
-  // Set up initial floating slots
   useEffect(() => {
     const floating = BADGES.filter((b) => b !== initialRandomBadge)
     const newSlots = {}
@@ -167,8 +174,6 @@ export default function LandingPage() {
       const heroCenterY = heroRect.top + heroRect.height / 2
       const slotCenterX = slotRect.left + slotRect.width / 2
       const slotCenterY = slotRect.top + slotRect.height / 2
-
-      // Calibrate orbit radius so badges comfortably frame the center content without clipping screen
       const preferredR = Math.max(160, Math.min(vw * 0.38, 250))
 
       geomRef.current = {
@@ -236,7 +241,6 @@ export default function LandingPage() {
           state.targetSpeed = baseSpeedRad
           const timeSinceLastCycle = now - state.lastCycleEndTime
 
-          // Reliably trigger the strike & replacement after 3.2s
           if (timeSinceLastCycle >= 3200) {
             const currentIdx = BADGES.indexOf(state.currentActiveId)
             const nextCandidate = BADGES[(currentIdx + 1) % BADGES.length]
@@ -319,7 +323,6 @@ export default function LandingPage() {
           }
 
           if (p >= 1) {
-            // Impact and replace center badge!
             state.phase = 'IMPACT'
             state.phaseStartTime = now
             const prevActive = state.currentActiveId
@@ -523,7 +526,6 @@ export default function LandingPage() {
 
   return (
     <div className="w-full min-h-screen bg-[#000000] text-white flex flex-col font-sans selection:bg-white/20">
-      {/* Floating Island Nav Header */}
       <FloatingIslandNav />
 
       {/* SECTION 1: HERO */}
@@ -533,7 +535,6 @@ export default function LandingPage() {
       >
         <WaterRippleCanvas ref={rippleRef} className="absolute inset-0 z-0 pointer-events-auto" />
 
-        {/* Orbit Track Elements */}
         <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
           <div
             ref={cometTailRef}
@@ -574,30 +575,25 @@ export default function LandingPage() {
             })}
         </div>
 
-        {/* Center Stage & Hero Copy */}
         <div
           ref={heroWrapperRef}
           className="relative z-20 flex flex-col items-center text-center max-w-[680px] px-4 pointer-events-auto"
         >
-          {/* Proof signal badge */}
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/15 bg-[#181818]/80 backdrop-blur-md mb-6">
+          <div className="inline-flex items-center gap-2 py-1 px-3 rounded-full border border-white/10 bg-[#181818]/80 backdrop-blur-md mb-6">
             <span className="w-2 h-2 rounded-full bg-emerald-400" />
             <span className="text-xs font-medium text-slate-300">
               4,280 engineers hired across 380 tech teams
             </span>
           </div>
 
-          {/* Heading with left to right text gradient */}
           <h1 className="hero-heading-gradient text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight leading-tight [text-wrap:balance]">
             Turn your raw code and algorithms into offers
           </h1>
 
-          {/* Subheading strictly max width 680px */}
           <p className="mt-4 text-base sm:text-lg text-slate-400 font-normal leading-relaxed max-w-[680px] [text-wrap:pretty]">
             CareerSync combines your real GitHub commits, LeetCode rankings, and LinkedIn credentials into one verified developer profile recruiters actually open.
           </p>
 
-          {/* Interactive Platform Badge Hub */}
           <div ref={centerSlotRef} className="h-20 w-20 my-4 flex items-center justify-center relative">
             {pulseRingActive && (
               <div
@@ -632,7 +628,6 @@ export default function LandingPage() {
             )}
           </div>
 
-          {/* Dynamic Telemetry Metric Output */}
           <div aria-live="polite" className="h-12 flex flex-col items-center justify-center">
             {activeConfig && textPhase !== 'hidden' ? (
               <div className="flex flex-col items-center">
@@ -651,18 +646,17 @@ export default function LandingPage() {
             )}
           </div>
 
-          {/* Primary Action Button */}
           <div className="mt-6 flex flex-col sm:flex-row items-center gap-3">
+            {/* Button per B1 and B2: text-base semibold, 8px vertical 12px horizontal padding token */}
             <Link
               to="/auth"
-              className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-white text-slate-950 font-semibold text-base shadow-lg hover:bg-slate-200 active:scale-[0.98] transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:outline-none"
+              className="inline-flex items-center justify-center py-2 px-3 rounded-xl bg-white text-slate-950 font-semibold text-base shadow-lg hover:bg-slate-200 active:scale-[0.98] transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:outline-none"
             >
               Build your portfolio
               <ArrowRight className="ml-2 w-4 h-4" />
             </Link>
           </div>
 
-          {/* Secondary Sign In Option */}
           <div className="mt-4 flex items-center justify-center gap-1.5 text-sm text-slate-400">
             <span>Already have an account?</span>
             <Link
@@ -694,10 +688,10 @@ export default function LandingPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* The Old Way */}
+            {/* The Old Way: outer rounded-2xl (16px), gap 8px -> inner rounded-lg (8px) */}
             <div className="rounded-2xl border border-white/10 bg-[#1F1F1F] p-6 flex flex-col justify-between">
               <div>
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-[#272727] text-slate-400 text-xs font-semibold mb-6">
+                <div className="inline-flex items-center gap-2 py-1 px-3 rounded-lg bg-[#272727] text-slate-400 text-xs font-semibold mb-6">
                   The Old Way
                 </div>
                 <h3 className="text-xl font-bold text-white mb-4">
@@ -728,9 +722,9 @@ export default function LandingPage() {
             </div>
 
             {/* The CareerSync Way */}
-            <div className="rounded-2xl border border-white/15 bg-[#1F1F1F] p-6 flex flex-col justify-between shadow-xl">
+            <div className="rounded-2xl border border-white/10 bg-[#1F1F1F] p-6 flex flex-col justify-between shadow-xl">
               <div>
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-white text-slate-950 text-xs font-semibold mb-6">
+                <div className="inline-flex items-center gap-2 py-1 px-3 rounded-lg bg-white text-slate-950 text-xs font-semibold mb-6">
                   The CareerSync Way
                 </div>
                 <h3 className="text-xl font-bold text-white mb-4">
@@ -779,9 +773,10 @@ export default function LandingPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Benefit 1: outer rounded-2xl (16px), gap 8px -> inner rounded-lg (8px) */}
             <div className="rounded-2xl border border-white/10 bg-[#181818] p-6 hover:border-white/20 transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]">
-              <div className="w-10 h-10 rounded-xl bg-[#272727] flex items-center justify-center text-white mb-5 border border-white/10">
-                <Github size={20} color="#FFFFFF" />
+              <div className="w-10 h-10 rounded-lg bg-[#272727] flex items-center justify-center text-white mb-5 border border-white/10">
+                <GithubLogo size={20} color="#FFFFFF" />
               </div>
               <h3 className="text-lg font-bold text-white mb-2">
                 Live repository telemetry
@@ -791,9 +786,10 @@ export default function LandingPage() {
               </p>
             </div>
 
+            {/* Benefit 2 */}
             <div className="rounded-2xl border border-white/10 bg-[#181818] p-6 hover:border-white/20 transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]">
-              <div className="w-10 h-10 rounded-xl bg-[#272727] flex items-center justify-center text-white mb-5 border border-white/10">
-                <Code2 size={20} className="text-amber-400" />
+              <div className="w-10 h-10 rounded-lg bg-[#272727] flex items-center justify-center text-white mb-5 border border-white/10">
+                <Code size={20} className="text-amber-400" />
               </div>
               <h3 className="text-lg font-bold text-white mb-2">
                 Verified algorithmic percentiles
@@ -803,8 +799,9 @@ export default function LandingPage() {
               </p>
             </div>
 
+            {/* Benefit 3 */}
             <div className="rounded-2xl border border-white/10 bg-[#181818] p-6 hover:border-white/20 transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]">
-              <div className="w-10 h-10 rounded-xl bg-[#272727] flex items-center justify-center text-white mb-5 border border-white/10">
+              <div className="w-10 h-10 rounded-lg bg-[#272727] flex items-center justify-center text-white mb-5 border border-white/10">
                 <ShieldCheck size={20} className="text-sky-400" />
               </div>
               <h3 className="text-lg font-bold text-white mb-2">
@@ -815,9 +812,10 @@ export default function LandingPage() {
               </p>
             </div>
 
+            {/* Benefit 4 */}
             <div className="rounded-2xl border border-white/10 bg-[#181818] p-6 hover:border-white/20 transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]">
-              <div className="w-10 h-10 rounded-xl bg-[#272727] flex items-center justify-center text-white mb-5 border border-white/10">
-                <Terminal size={20} className="text-emerald-400" />
+              <div className="w-10 h-10 rounded-lg bg-[#272727] flex items-center justify-center text-white mb-5 border border-white/10">
+                <TerminalWindow size={20} className="text-emerald-400" />
               </div>
               <h3 className="text-lg font-bold text-white mb-2">
                 Recruiter telemetry and views
@@ -920,7 +918,6 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Metrics Bar */}
           <div className="rounded-2xl border border-white/10 bg-[#181818] p-8 grid grid-cols-1 sm:grid-cols-3 gap-8 text-center">
             <div>
               <p className="text-3xl sm:text-4xl font-bold text-white font-mono">47.2%</p>
@@ -996,7 +993,7 @@ export default function LandingPage() {
           <div className="mt-8">
             <Link
               to="/auth"
-              className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-white text-slate-950 font-semibold text-base shadow-xl hover:bg-slate-200 active:scale-[0.98] transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:outline-none"
+              className="inline-flex items-center justify-center py-2 px-3 rounded-xl bg-white text-slate-950 font-semibold text-base shadow-xl hover:bg-slate-200 active:scale-[0.98] transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:outline-none"
             >
               Build your portfolio
               <ArrowRight className="ml-2 w-4 h-4" />

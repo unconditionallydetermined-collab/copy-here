@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Circle, X, List } from '@phosphor-icons/react'
 
 export default function FloatingIslandNav() {
   const [isOpen, setIsOpen] = useState(false)
@@ -29,7 +30,7 @@ export default function FloatingIslandNav() {
       <header className="fixed top-0 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none">
         <nav
           aria-label="Primary navigation"
-          className="mt-6 pointer-events-auto flex items-center justify-between gap-6 px-4 py-2 rounded-full border border-white/15 bg-[#181818]/90 backdrop-blur-xl shadow-2xl transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] max-w-4xl w-full sm:w-auto"
+          className="mt-6 pointer-events-auto flex items-center justify-between gap-6 px-4 py-2 rounded-full border border-white/10 bg-[#181818]/90 backdrop-blur-xl shadow-2xl transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] max-w-4xl w-full sm:w-auto"
         >
           {/* Brand Logo */}
           <Link
@@ -56,23 +57,23 @@ export default function FloatingIslandNav() {
             ))}
           </div>
 
-          {/* Desktop Action CTAs */}
+          {/* Header Action Buttons per B1 & B2: 8px vertical 12px horizontal padding token */}
           <div className="hidden sm:flex items-center gap-2">
             <Link
               to="/auth?mode=signin"
-              className="px-3 py-1.5 text-sm font-semibold text-slate-300 hover:text-white rounded-full transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:outline-none"
+              className="py-2 px-3 text-sm font-semibold text-slate-300 hover:text-white rounded-full transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:outline-none"
             >
               Sign in
             </Link>
             <Link
               to="/auth"
-              className="px-3.5 py-1.5 text-sm font-semibold text-slate-950 bg-white rounded-full hover:bg-slate-200 active:scale-[0.98] transition-all duration-200 focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:outline-none"
+              className="py-2 px-3 text-sm font-semibold text-slate-950 bg-white rounded-full hover:bg-slate-200 active:scale-[0.98] transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:outline-none"
             >
               Get started
             </Link>
           </div>
 
-          {/* Mobile Hamburger Button with Fluid Morph */}
+          {/* Mobile Hamburger Morph: rotates and translates into perfect X */}
           <button
             type="button"
             onClick={() => setIsOpen(!isOpen)}
@@ -94,38 +95,39 @@ export default function FloatingIslandNav() {
         </nav>
       </header>
 
-      {/* Screen-filling Mobile Modal Overlay */}
+      {/* Screen filling Modal Expansion with Heavy Glass Effect & Staggered Mask Reveal */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-40 sm:hidden backdrop-blur-3xl bg-black/85 flex flex-col justify-center px-8 transition-opacity duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]"
+          className="fixed inset-0 z-40 sm:hidden backdrop-blur-3xl bg-black/80 flex flex-col justify-center px-8 transition-opacity duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]"
         >
           <div className="flex flex-col gap-6 text-center">
             {navLinks.map((link, idx) => (
-              <a
-                key={link.label}
-                href={link.href}
-                onClick={(e) => handleLinkClick(e, link.href)}
-                style={{
-                  transitionDelay: `${100 + idx * 50}ms`,
-                }}
-                className="text-2xl font-semibold text-white tracking-tight active:scale-[0.98] transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]"
-              >
-                {link.label}
-              </a>
+              <div key={link.label} className="overflow-hidden">
+                <a
+                  href={link.href}
+                  onClick={(e) => handleLinkClick(e, link.href)}
+                  style={{
+                    animationDelay: `${100 + idx * 50}ms`,
+                  }}
+                  className="inline-block text-2xl font-semibold text-white tracking-tight animate-stagger-up active:scale-[0.98] transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]"
+                >
+                  {link.label}
+                </a>
+              </div>
             ))}
 
             <div className="pt-6 flex flex-col gap-3">
               <Link
                 to="/auth?mode=signin"
                 onClick={() => setIsOpen(false)}
-                className="w-full py-3 rounded-xl border border-white/15 text-white font-semibold text-base active:scale-[0.98] transition-all"
+                className="w-full py-2 px-3 rounded-xl border border-white/10 text-white font-semibold text-base active:scale-[0.98] transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]"
               >
                 Sign in
               </Link>
               <Link
                 to="/auth"
                 onClick={() => setIsOpen(false)}
-                className="w-full py-3 rounded-xl bg-white text-slate-950 font-semibold text-base active:scale-[0.98] transition-all"
+                className="w-full py-2 px-3 rounded-xl bg-white text-slate-950 font-semibold text-base active:scale-[0.98] transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]"
               >
                 Get started
               </Link>
