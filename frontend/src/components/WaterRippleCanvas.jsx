@@ -418,7 +418,7 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
             dot.oy >= protRect.top &&
             dot.oy <= protRect.bottom
           ) {
-            energy = 0
+            energy = Math.min(energy, 0.28)
           }
         }
 

@@ -141,6 +141,7 @@ export default function LandingPage() {
   const [ctaShimmerActive, setCtaShimmerActive] = useState(false)
   const [ctaShimmerCycle, setCtaShimmerCycle] = useState(0)
   const [pulseRingActive, setPulseRingActive] = useState(false)
+  const [centerCoords, setCenterCoords] = useState({ x: 0, y: 0 })
 
   const heroWrapperRef = useRef(null)
   const centerSlotRef = useRef(null)
@@ -153,18 +154,13 @@ export default function LandingPage() {
 
   // Layout & geometry cached state
   const geomRef = useRef({
-    heroCenterX: 0,
-    heroCenterY: 0,
     slotCenterX: 0,
     slotCenterY: 0,
     exclusionRect: { left: 0, top: 0, right: 0, bottom: 0 },
-    radius: 280,
+    radius: 260,
     iconRadius: 27,
     pad: 28,
     isParked: false,
-    parkedCenterX: 0,
-    parkedCenterY: 0,
-    parkedRadius: 50,
     width: 0,
     height: 0,
   })
@@ -175,12 +171,15 @@ export default function LandingPage() {
     phaseStartTime: performance.now(),
     currentActiveId: 'github',
     // 3 fixed equilateral triangle slots (0, 120, 240 deg)
-    floatingSlots: ['leetcode', 'linkedin', 'skills'],
-    incomingSlotIndex: 0, // 0 -> 1 -> 2 -> 0 ...
+    slotAssignments: {
+      github: null,
+      leetcode: 0,
+      linkedin: 1,
+      skills: 2,
+    },
+    incomingSlotIndex: 0,
     incomingId: null,
-    incomingSlot: null,
     returningId: null,
-    returningSlot: null,
     returningOpacity: 0,
     dockSide: 'right', // 'right' (angle 0) or 'left' (angle PI)
     brakeStartAngle: 0,
@@ -195,7 +194,6 @@ export default function LandingPage() {
     readCountDone: true,
     cometStartX: 0,
     cometStartY: 0,
-    cycleCount: 0,
     physics: {
       github:   { x: 0, y: 0, scale: 1, opacity: 0 },
       leetcode: { x: 0, y: 0, scale: 1, opacity: 0.85 },
@@ -219,7 +217,7 @@ export default function LandingPage() {
     return () => mq.removeEventListener('change', handler)
   }, [])
 
-  // Geometry measurement & exclusion zone calculation (True Circle Orbit)
+  // Geometry measurement & exclusion zone calculation (Centered on Center Icon)
   const updateGeometry = () => {
     const vw = window.innerWidth
     const vh = window.innerHeight
@@ -229,19 +227,21 @@ export default function LandingPage() {
 
     const slotEl = centerSlotRef.current
     let slotCenterX = vw / 2
-    let slotCenterY = vh / 2
+    let slotCenterY = vh / 2 - 20
     if (slotEl) {
       const sr = slotEl.getBoundingClientRect()
       slotCenterX = sr.left + sr.width / 2
       slotCenterY = sr.top + sr.height / 2
     }
 
+    setCenterCoords({ x: slotCenterX, y: slotCenterY })
+
+    // Measure the main content block (heading, slot, caption, CTA, sign in)
     const elements = [
       heroWrapperRef.current,
       centerSlotRef.current,
       buttonRef.current,
       signInRef.current,
-      ticksRef.current,
     ].filter(Boolean)
 
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
@@ -260,9 +260,6 @@ export default function LandingPage() {
       bottom: maxY + pad,
     }
 
-    const margin = 14
-    let maxFitR = Math.min(slotCenterX, vw - slotCenterX, slotCenterY, vh - slotCenterY) - (iconRadius + margin)
-
     const corners = [
       [exclusionRect.left, exclusionRect.top],
       [exclusionRect.right, exclusionRect.top],
@@ -273,59 +270,22 @@ export default function LandingPage() {
     for (const [cx, cy] of corners) {
       maxCornerDist = Math.max(maxCornerDist, Math.hypot(cx - slotCenterX, cy - slotCenterY))
     }
+
     let requiredR = maxCornerDist + iconRadius + pad
+    const preferredR = Math.max(220, Math.min(vw * 0.45, vh * 0.42, 320))
+    const R = Math.max(preferredR, requiredR)
 
-    let isParked = false
-    let parkedCenterX = slotCenterX
-    let parkedCenterY = Math.max(50, exclusionRect.top / 2)
-    let parkedRadius = Math.min(Math.max(35, exclusionRect.top / 2 - 16), 55)
-
-    if (requiredR > maxFitR) {
-      // First shrink: orbs to 40px (32px under 360px), pad to 12px
-      iconRadius = vw < 360 ? 16 : 20
-      pad = 12
-      exclusionRect = {
-        left: minX - pad,
-        top: minY - pad,
-        right: maxX + pad,
-        bottom: maxY + pad,
-      }
-      maxCornerDist = 0
-      for (const [cx, cy] of [
-        [exclusionRect.left, exclusionRect.top],
-        [exclusionRect.right, exclusionRect.top],
-        [exclusionRect.left, exclusionRect.bottom],
-        [exclusionRect.right, exclusionRect.bottom],
-      ]) {
-        maxCornerDist = Math.max(maxCornerDist, Math.hypot(cx - slotCenterX, cy - slotCenterY))
-      }
-      requiredR = maxCornerDist + iconRadius + pad
-      maxFitR = Math.min(slotCenterX, vw - slotCenterX, slotCenterY, vh - slotCenterY) - (iconRadius + margin)
-
-      if (requiredR > maxFitR) {
-        // Fallback: rotate gently in free space above heading
-        isParked = true
-      }
-    }
-
-    const finalGeom = {
-      heroCenterX: vw / 2,
-      heroCenterY: vh / 2,
+    geomRef.current = {
       slotCenterX,
       slotCenterY,
       exclusionRect,
-      radius: isParked ? parkedRadius : requiredR,
+      radius: R,
       iconRadius,
       pad,
-      isParked,
-      parkedCenterX,
-      parkedCenterY,
-      parkedRadius,
+      isParked: false,
       width: vw,
       height: vh,
     }
-
-    geomRef.current = finalGeom
 
     if (rippleRef.current?.setProtectedRect) {
       rippleRef.current.setProtectedRect(exclusionRect)
@@ -343,14 +303,14 @@ export default function LandingPage() {
     }
   }, [headline])
 
-  // Main 60fps unified animation loop with 6fd3b85 true circular kinematics
+  // Main 60fps unified animation loop with 6fd3b85 true circular kinematics around center icon
   useEffect(() => {
     if (reducedMotion) return
 
     let animId = null
     const baseSpeedRad = (26 * Math.PI) / 180 // ~26 deg/s (~13.85s/lap)
     const maxAccel = (35 * Math.PI) / 180 // ~35 deg/s^2
-    const MIN_HOLD_TIME = 4000
+    const MIN_HOLD_TIME = 3800
 
     const loop = (now) => {
       const state = stateRef.current
@@ -386,16 +346,20 @@ export default function LandingPage() {
           state.sharedPhase = (state.sharedPhase + state.currentSpeed * dt) % (2 * Math.PI)
           state.targetSpeed = baseSpeedRad
 
-          if (timeInPhase >= MIN_HOLD_TIME && !geom.isParked) {
-            // Turn order: cycle slot strictly in order 0 -> 1 -> 2 -> 0 -> ...
+          if (timeInPhase >= MIN_HOLD_TIME) {
+            // Find which badge is assigned to the current incoming slot
             const incomingSlot = state.incomingSlotIndex
-            const candidate = state.floatingSlots[incomingSlot]
+            const candidate = BADGES.find(
+              (id) => id !== state.currentActiveId && state.slotAssignments[id] === incomingSlot
+            ) || BADGES.find((id) => id !== state.currentActiveId)
+
+            const actualSlot = state.slotAssignments[candidate] ?? incomingSlot
 
             // Calculate current slot angle
-            const slotAngle = (state.sharedPhase + incomingSlot * ((2 * Math.PI) / 3)) % (2 * Math.PI)
+            const slotAngle = (state.sharedPhase + actualSlot * ((2 * Math.PI) / 3)) % (2 * Math.PI)
             const normSlotAngle = (slotAngle + 2 * Math.PI) % (2 * Math.PI)
 
-            // Target dock angle at center slot height (y = 0):
+            // Target dock angle at center icon height (y = 0):
             // Left dock = Math.PI (x = -R, y = 0), Right dock = 2*Math.PI (x = +R, y = 0)
             const targetDock = normSlotAngle < Math.PI ? Math.PI : 2 * Math.PI
             const distToDock = targetDock - normSlotAngle
@@ -404,9 +368,8 @@ export default function LandingPage() {
             const brakeDelta = (baseSpeedRad * brakeSec) / 2
 
             // Exact kinematic braking triggered at the precise angle
-            if (distToDock <= brakeDelta + baseSpeedRad * dt * 2) {
+            if (distToDock <= brakeDelta + baseSpeedRad * dt * 2.5) {
               state.incomingId = candidate
-              state.incomingSlot = incomingSlot
               state.brakeStartAngle = state.sharedPhase
               state.brakeDelta = distToDock
               state.brakeDuration = Math.max(600, (2 * distToDock / Math.max(state.currentSpeed, 0.1)) * 1000)
@@ -472,7 +435,7 @@ export default function LandingPage() {
           const easeP = Math.pow(p, 2.4)
 
           const incoming = state.incomingId
-          // Strictly horizontal flight along the center slot row only
+          // Strictly horizontal flight directly to center icon (0, 0)
           const currentX = state.cometStartX * (1 - easeP)
           const currentY = 0
 
@@ -504,42 +467,39 @@ export default function LandingPage() {
             if (cometTailRef.current) cometTailRef.current.style.opacity = '0'
             state.phase = 'IMPACT'
             state.phaseStartTime = now
+
+            // IMPACT AND REPLACEMENT
+            const prevActive = state.currentActiveId
+            const incomingSlot = state.slotAssignments[incoming] ?? state.incomingSlotIndex
+
+            // Swap active center platform and assign vacated slot to outgoing platform
+            state.slotAssignments[prevActive] = incomingSlot
+            state.slotAssignments[incoming] = null
+            state.currentActiveId = incoming
+            setActiveStageId(incoming)
+
+            state.returningId = prevActive
+            state.returningOpacity = 0
+
+            // Splash dots with high fluid intensity ripple wave
+            if (rippleRef.current) {
+              rippleRef.current.triggerSlam(geom.slotCenterX, geom.slotCenterY, {
+                intensity: 145,
+                speed: 310,
+                width: 65,
+                maxRadius: 420,
+                blastRadius: 140,
+              })
+              rippleRef.current.boostDamping(1200)
+            }
+
+            setPulseRingActive(true)
+            setTimeout(() => setPulseRingActive(false), 800)
           }
           break
         }
 
         case 'IMPACT': {
-          state.currentSpeed = 0
-          if (timeInPhase <= dt * 1000 + 10) {
-            const oldCenter = state.currentActiveId
-            const newCenter = state.incomingId
-            state.currentActiveId = newCenter
-            setActiveStageId(newCenter)
-            setExitingStageId(null)
-            setExitingOpacity(0)
-            setPulseRingActive(true)
-            setTimeout(() => setPulseRingActive(false), 800)
-
-            // REPLACEMENT: old center takes the exact slot the incoming orb left
-            state.floatingSlots[state.incomingSlot] = oldCenter
-            state.returningId = oldCenter
-            state.returningSlot = state.incomingSlot
-            state.returningOpacity = 0
-
-            state.cycleCount += 1
-
-            if (rippleRef.current) {
-              rippleRef.current.triggerSlam(geom.slotCenterX, geom.slotCenterY, {
-                intensity: 105,
-                speed: 270,
-                width: 54,
-                maxRadius: 330,
-                blastRadius: 90,
-              })
-              rippleRef.current.boostDamping(1200)
-            }
-          }
-
           if (timeInPhase >= 80) {
             state.phase = 'SETTLE'
             state.phaseStartTime = now
@@ -549,7 +509,7 @@ export default function LandingPage() {
 
         case 'SETTLE': {
           state.currentSpeed = 0
-          // Re-materialize old center orb in vacated floating slot (opacity only: 0 -> 0.5 over 500ms)
+          // Re-materialize previous active badge in its vacated slot (0 -> 0.5 over 500ms)
           if (timeInPhase >= 300) {
             const retP = Math.min(1, (timeInPhase - 300) / 500)
             state.returningOpacity = 0.5 * retP
@@ -609,7 +569,7 @@ export default function LandingPage() {
 
           if (pulseElapsed >= totalPulseDuration) {
             setCtaShimmerActive(false)
-            // Advance turn order to next slot in sequence
+            // Cycle incoming slot strictly in triangle vertex order: 0 -> 1 -> 2 -> 0 -> ...
             state.incomingSlotIndex = (state.incomingSlotIndex + 1) % 3
             state.phase = 'WAKE'
             state.phaseStartTime = now
@@ -620,7 +580,7 @@ export default function LandingPage() {
         case 'WAKE': {
           const wakeP = Math.min(1, timeInPhase / 2500)
           const easeWake = 0.5 - 0.5 * Math.cos(wakeP * Math.PI)
-          state.targetSpeed = baseSpeedRad * easeWake
+          state.currentSpeed = baseSpeedRad * easeWake
           state.sharedPhase = (state.sharedPhase + state.currentSpeed * dt) % (2 * Math.PI)
 
           if (wakeP >= 1) {
@@ -635,37 +595,30 @@ export default function LandingPage() {
           break
       }
 
-      // --- POSITIONS PASS (PURE CONTINUOUS KINEMATICS, NO SNAPPING) ---
+      // --- POSITIONS PASS (ROTATION CENTERED DIRECTLY ON CENTER ICON) ---
       const isHalted = state.phase !== 'HOLD' && state.phase !== 'WAKE'
       const driftScale = isHalted ? 0.25 : 1.0
 
-      state.floatingSlots.forEach((id, slotIdx) => {
+      BADGES.forEach((id) => {
+        if (id === state.currentActiveId) return
         if (state.phase === 'COMET' && id === state.incomingId) return
 
         const p = physics[id]
+        const slotIdx = state.slotAssignments[id] ?? 0
         const slotAngle = (state.sharedPhase + slotIdx * ((2 * Math.PI) / 3)) % (2 * Math.PI)
 
-        let orbitCX = 0
-        let orbitCY = 0
-        let orbitR = geom.radius
-
-        if (geom.isParked) {
-          orbitCX = geom.parkedCenterX - geom.slotCenterX
-          orbitCY = geom.parkedCenterY - geom.slotCenterY
-          orbitR = geom.parkedRadius
-        }
-
-        const sqX = orbitCX + Math.cos(slotAngle) * orbitR
-        const sqY = orbitCY + Math.sin(slotAngle) * orbitR
+        // Circle coordinates around center icon (0, 0)
+        const sqX = Math.cos(slotAngle) * geom.radius
+        const sqY = Math.sin(slotAngle) * geom.radius
 
         // Organic sum-of-sines drift (radial up to 8px, tangential up to 6px)
         const d = DRIFT_CONFIG[id] || DRIFT_CONFIG.github
         const rDrift = (d.rA1 * Math.sin(tSec / d.rT1 + d.rPhi1) + d.rA2 * Math.sin(tSec / d.rT2 + d.rPhi2)) * driftScale
         const tDrift = (d.tA1 * Math.sin(tSec / d.tT1 + d.tPhi1) + d.tA2 * Math.sin(tSec / d.tT2 + d.tPhi2)) * driftScale
 
-        const invLen = 1 / (Math.hypot(sqX - orbitCX, sqY - orbitCY) || 1)
-        const radDirX = (sqX - orbitCX) * invLen
-        const radDirY = (sqY - orbitCY) * invLen
+        const invLen = 1 / (Math.hypot(sqX, sqY) || 1)
+        const radDirX = sqX * invLen
+        const radDirY = sqY * invLen
         const tanDirX = -radDirY
         const tanDirY = radDirX
 
@@ -765,20 +718,26 @@ export default function LandingPage() {
         overscrollBehavior: 'none',
       }}
     >
-      {/* Background Reacting Dot Grid Canvas */}
+      {/* Background Reacting Dot Grid Canvas with Splash Ripple */}
       <WaterRippleCanvas ref={rippleRef} className="z-0 pointer-events-auto" />
 
-      {/* Orbit Track Layer (persistent floating orbs + comet tail) */}
-      <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+      {/* Orbit Track Layer (Centered exactly at the Center Icon coords) */}
+      <div
+        className="absolute z-10 pointer-events-none"
+        style={{
+          left: `${centerCoords.x || 0}px`,
+          top: `${centerCoords.y || 0}px`,
+        }}
+      >
         {/* Comet Tail */}
         <div
           ref={cometTailRef}
           aria-hidden="true"
           className="absolute h-1.5 rounded-full pointer-events-none opacity-0 transition-opacity duration-200"
           style={{
-            left: '50%',
-            top: '50%',
-            marginTop: '-3px',
+            left: 0,
+            top: 0,
+            marginTop: '-1.5px',
             height: '3px',
             background: 'linear-gradient(90deg, rgba(56,189,248,0.85) 0%, rgba(56,189,248,0.2) 60%, transparent 100%)',
             boxShadow: '0 0 12px rgba(56,189,248,0.5)',
@@ -803,8 +762,8 @@ export default function LandingPage() {
                 }}
                 aria-label={cfg.name}
                 style={{
-                  left: '50%',
-                  top: '50%',
+                  left: 0,
+                  top: 0,
                   marginLeft: '-27px',
                   marginTop: '-27px',
                 }}
@@ -816,12 +775,12 @@ export default function LandingPage() {
           })}
       </div>
 
-      {/* Center Stage & Content Column (Measured Exclusion Zone) */}
+      {/* Center Stage & Content Column */}
       <div
         ref={heroWrapperRef}
         className="relative z-20 flex flex-col items-center text-center max-w-sm px-4 pointer-events-auto"
       >
-        {/* 1. Randomized One-liner Heading (Stable block height, opacity fade-in) */}
+        {/* 1. Randomized One-liner Heading */}
         <div className="w-full max-w-[680px] min-h-[4.5rem] sm:min-h-[5.5rem] flex items-center justify-center text-center">
           <h1
             className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white leading-tight text-balance transition-opacity duration-600 ease-out select-none"
@@ -944,24 +903,24 @@ export default function LandingPage() {
             Sign in
           </Link>
         </div>
+      </div>
 
-        {/* 5. Three Trust Ticks Stacked VERTICALLY in centered column */}
-        <div
-          ref={ticksRef}
-          className="mt-5 flex flex-col items-start gap-2 text-xs text-white/60 pointer-events-auto"
-        >
-          <div className="inline-flex items-center gap-2">
-            <Check size={14} className="text-emerald-400 flex-shrink-0" />
-            <span>No credit card required</span>
-          </div>
-          <div className="inline-flex items-center gap-2">
-            <Check size={14} className="text-emerald-400 flex-shrink-0" />
-            <span>Syncs in 30 seconds</span>
-          </div>
-          <div className="inline-flex items-center gap-2">
-            <Check size={14} className="text-emerald-400 flex-shrink-0" />
-            <span>Cancel or delete anytime</span>
-          </div>
+      {/* 5. Three Trust Ticks Stacked VERTICALLY moved further down near bottom */}
+      <div
+        ref={ticksRef}
+        className="absolute bottom-6 sm:bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-start gap-2 text-xs text-white/50 pointer-events-auto z-20"
+      >
+        <div className="inline-flex items-center gap-2">
+          <Check size={14} className="text-emerald-400 flex-shrink-0" />
+          <span>No credit card required</span>
+        </div>
+        <div className="inline-flex items-center gap-2">
+          <Check size={14} className="text-emerald-400 flex-shrink-0" />
+          <span>Syncs in 30 seconds</span>
+        </div>
+        <div className="inline-flex items-center gap-2">
+          <Check size={14} className="text-emerald-400 flex-shrink-0" />
+          <span>Cancel or delete anytime</span>
         </div>
       </div>
     </main>
