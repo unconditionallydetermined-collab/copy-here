@@ -14,6 +14,9 @@ function getChatErrorMessage(error) {
   if (status === 429) {
     return 'The AI service is busy right now. Wait a moment and try again.'
   }
+  if (error?.code === 'ECONNABORTED' || error?.code === 'ETIMEDOUT') {
+    return 'The AI response took too long. The server may be waking up or the AI provider is slow. Please try again.'
+  }
   if (status >= 500) {
     return serverMessage || 'The AI service had a problem processing that request. Please try again shortly.'
   }

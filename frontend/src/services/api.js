@@ -308,7 +308,7 @@ export const analyticsApi = {
 export const aiApi = {
   resumeReview: () => api.post('/ai/resume-review'),
   skillGap: (jobDescription) => api.post('/ai/skill-gap', { jobDescription }),
-  chat: (message) => api.post('/ai/chat', { message }),
+  chat: (message) => api.post('/ai/chat', { message }, { timeout: 60000 }),
   history: () => api.get('/ai/history'),
 }
 

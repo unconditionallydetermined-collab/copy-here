@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -64,7 +65,7 @@ public class AiService {
                         .bodyValue(objectMapper.writeValueAsString(requestBody))
                         .retrieve()
                         .bodyToMono(String.class)
-                        .block();
+                        .block(Duration.ofSeconds(50));
 
                 if (response != null && !response.isBlank()) {
                     JsonNode responseNode = objectMapper.readTree(response);
