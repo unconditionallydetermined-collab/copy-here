@@ -55,7 +55,7 @@ export default function AboutPage() {
               className="w-8 h-8 rounded-lg flex items-center justify-center"
               style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}
             >
-              <TrendingUp size={15} className="text-white" />
+              <img src="/favicon.svg" alt="" className="w-5 h-5 object-contain" />
             </div>
             <span className="font-bold text-white text-[15px] tracking-tight">Career Sync</span>
           </Link>
@@ -236,7 +236,7 @@ export default function AboutPage() {
               className="w-6 h-6 rounded-md flex items-center justify-center"
               style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}
             >
-              <TrendingUp size={11} className="text-white" />
+              <img src="/favicon.svg" alt="" className="w-4 h-4 object-contain" />
             </div>
             <span className="text-sm font-semibold text-white/60">Career Sync</span>
           </Link>

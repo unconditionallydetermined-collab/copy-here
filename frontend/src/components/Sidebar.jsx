@@ -43,7 +43,7 @@ export default function Sidebar({ onClose }) {
       <div className="internal-brand flex items-center justify-between p-5 border-b">
         <div className="flex items-center gap-2.5">
           <div className="internal-brand-mark w-8 h-8 rounded-lg flex items-center justify-center">
-            <TrendingUp size={18} className="text-white" />
+            <img src="/favicon.svg" alt="" className="w-5 h-5 object-contain" />
           </div>
           <div>
             <span className="font-bold text-sm tracking-tight internal-brand-name">Career Sync</span>

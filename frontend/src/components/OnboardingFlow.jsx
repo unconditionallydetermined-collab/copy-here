@@ -176,6 +176,32 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
   const [dotsBursting, setDotsBursting] = useState(false)
   const [centerRippling, setCenterRippling] = useState(false)
   const [highlightOption, setHighlightOption] = useState(false)
+  const [orbitTarget, setOrbitTarget] = useState({ x: window.innerWidth / 2, y: window.innerHeight / 2, width: 0, height: 0 })
+
+  useEffect(() => {
+    let frame = 0
+    const measure = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const target = document.querySelector('.onboarding-orbit-target')
+        if (!target) return
+        const rect = target.getBoundingClientRect()
+        setOrbitTarget({ x: Math.min(Math.max(rect.left + rect.width / 2, 72), window.innerWidth - 72), y: Math.min(Math.max(rect.top + rect.height / 2, 80), window.innerHeight - 90), width: rect.width, height: rect.height })
+      })
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    const root = document.querySelector('[data-onboarding-root]')
+    if (root) observer.observe(root)
+    window.addEventListener('resize', measure)
+    window.addEventListener('scroll', measure, true)
+    return () => {
+      cancelAnimationFrame(frame)
+      observer.disconnect()
+      window.removeEventListener('resize', measure)
+      window.removeEventListener('scroll', measure, true)
+    }
+  }, [currentStepId, leetcodePreview, githubQuery, selectedGithub, linkedinInput, resumeFile, skillsList, isSkippingInline])
 
   useEffect(() => {
     setShowAddLater(false)
@@ -462,19 +488,19 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-white text-[#0A0A0A] flex flex-col items-center justify-between overflow-hidden select-none font-sans h-[100dvh]">
+    <div data-onboarding-root className="fixed inset-0 z-50 bg-[#090B10] text-white flex flex-col items-center justify-between overflow-x-hidden overflow-y-auto overscroll-contain select-none font-sans min-h-[100dvh]">
       {/* 1. TOP PROGRESS BAR */}
-      <div className="w-full max-w-xl px-6 pt-5 pb-2 flex items-center gap-2">
+      <div className="w-full max-w-xl px-6 pt-[max(1rem,env(safe-area-inset-top))] pb-2 flex items-center gap-2 shrink-0">
         {ALL_STEPS.map((s) => {
           const isCompleted = savedData[s] || savedData.skipped?.includes(s)
           const isCurrent = currentStepId === s
           return (
             <div
               key={s}
-              className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden relative"
+              className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden relative"
             >
               <motion.div
-                className="absolute inset-y-0 left-0 bg-[#0A0A0A] rounded-full"
+                className="absolute inset-y-0 left-0 bg-white rounded-full"
                 initial={false}
                 animate={{
                   width: isCompleted || isCurrent ? '100%' : '0%',
@@ -492,7 +518,7 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
       </div>
 
       {/* 2. CENTER ICON BADGE & SIGNATURE DOTS */}
-      <div className="flex-1 w-full max-w-lg flex flex-col items-center justify-center px-6 relative">
+      <div className="flex-1 min-h-[520px] w-full max-w-lg flex flex-col items-center justify-center px-6 py-8 relative">
         <AnimatePresence>
           {centerRippling && (
             <motion.div
@@ -500,39 +526,50 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
               animate={{ scale: 2.2, opacity: 0 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.5 * DEBUG_SLOWMO, ease: 'easeOut' }}
-              className="absolute w-28 h-28 rounded-full border-2 border-[#0A0A0A] pointer-events-none"
+              style={{ borderColor: stepConfig.color, boxShadow: `0 0 30px ${stepConfig.color}55` }}
+              className="absolute z-0 w-28 h-28 rounded-full border-2 pointer-events-none"
             />
           )}
         </AnimatePresence>
 
-        {/* 6 IDLE ORBITING DOTS */}
+        {/* Color-lit dots orbit the next useful action, staying inside the viewport. */}
         {!reducedMotion && !dotsBursting && (
-          <div className="absolute w-44 h-44 rounded-full pointer-events-none flex items-center justify-center">
+          <motion.div
+            aria-hidden="true"
+            animate={{ left: orbitTarget.x, top: orbitTarget.y }}
+            transition={{ type: 'spring', stiffness: 90, damping: 22, mass: 0.9 }}
+            className="fixed z-[5] pointer-events-none"
+            style={{ width: 1, height: 1 }}
+          >
+            <div className="absolute rounded-full" style={{
+              width: Math.min(Math.max(orbitTarget.width + 54, 112), Math.max(112, window.innerWidth - 24)),
+              height: Math.min(Math.max(orbitTarget.height + 38, 82), 150),
+              left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
+              background: `radial-gradient(ellipse, ${stepConfig.color}16 0%, transparent 72%)`,
+            }} />
             {[0, 1, 2, 3, 4, 5].map((i) => {
-              const angle = (i * 60) * (Math.PI / 180)
-              const baseR = highlightOption ? 48 : 64
-              const x = Math.cos(angle) * baseR
-              const y = Math.sin(angle) * baseR
+              const rx = Math.min(Math.max((orbitTarget.width + 54) / 2, 56), Math.max(56, (window.innerWidth - 24) / 2))
+              const ry = Math.min(Math.max((orbitTarget.height + 38) / 2, 41), 75)
+              const points = Array.from({ length: 9 }, (_, j) => {
+                const a = ((j / 8) * Math.PI * 2) + ((i / 6) * Math.PI * 2)
+                return { x: Math.cos(a) * rx, y: Math.sin(a) * ry }
+              })
               return (
                 <motion.div
-                  key={i}
-                  animate={{
-                    x: [x, Math.cos(angle + 0.3) * (baseR + 4), x],
-                    y: [y, Math.sin(angle + 0.3) * (baseR + 4), y],
-                    scale: highlightOption ? 1.25 : 1,
-                  }}
+                  key={`${currentStepId}-${i}`}
+                  initial={{ x: points[0].x, y: points[0].y, opacity: 0 }}
+                  animate={{ x: points.map((point) => point.x), y: points.map((point) => point.y), opacity: [0, 1, 1, 1, 1, 1, 1, 1, 0.92] }}
                   transition={{
-                    duration: backendStatus === 'warming' ? 5.5 : 3.5,
-                    repeat: Infinity,
-                    ease: 'easeInOut',
-                    delay: i * 0.15,
+                    x: { duration: 13 + (i % 3) * 1.2, repeat: Infinity, ease: 'linear', delay: i * 0.16 },
+                    y: { duration: 13 + (i % 3) * 1.2, repeat: Infinity, ease: 'linear', delay: i * 0.16 },
+                    opacity: { duration: 0.7, ease: 'easeOut', delay: i * 0.1 },
                   }}
-                  style={{ backgroundColor: stepConfig.dotColor }}
-                  className="absolute w-2 h-2 rounded-full opacity-70"
+                  style={{ backgroundColor: '#fff', boxShadow: `0 0 7px 2px ${stepConfig.color}, 0 0 18px 5px ${stepConfig.color}88` }}
+                  className="absolute left-0 top-0 h-[9px] w-[9px] rounded-full"
                 />
               )
             })}
-          </div>
+          </motion.div>
         )}
 
         {/* 24 BURST & CONVERGING DOTS ON ADD */}
@@ -558,7 +595,8 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
                     delay: (i % 6) * 0.035,
                   }}
                   style={{ backgroundColor: stepConfig.dotColor }}
-                  className="absolute w-2 h-2 rounded-full"
+                  style={{ boxShadow: `0 0 10px 3px ${stepConfig.color}, 0 0 20px ${stepConfig.color}88` }}
+                  className="absolute z-0 w-2.5 h-2.5 rounded-full"
                 />
               )
             })}
@@ -572,7 +610,7 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -12 }}
           transition={{ duration: 0.28 * DEBUG_SLOWMO, ease: [0.23, 1, 0.32, 1] }}
-          className="w-[86px] h-[86px] rounded-full bg-white shadow-[0_12px_36px_rgba(0,0,0,0.08),0_2px_10px_rgba(0,0,0,0.04)] border border-slate-100 flex items-center justify-center relative z-10 mb-6"
+          className="w-[86px] h-[86px] rounded-full bg-[#11141B] shadow-[0_12px_36px_rgba(0,0,0,0.4),0_0_30px_rgba(255,255,255,0.04)] border border-white/10 flex items-center justify-center relative z-10 mb-6"
         >
           {React.createElement(stepConfig.icon, {
             size: 40,
@@ -582,7 +620,7 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
         </motion.div>
 
         {/* Large Title */}
-        <h2 className="text-[clamp(32px,7vw,56px)] font-black tracking-tight text-[#0A0A0A] text-center leading-[1.08] mb-6">
+        <h2 className="text-[clamp(32px,7vw,56px)] font-black tracking-tight text-white text-center leading-[1.08] mb-6">
           {stepConfig.title}
         </h2>
 
@@ -597,23 +635,23 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
                 exit={{ opacity: 0, y: -8 }}
                 className="w-full flex flex-col items-center text-center p-4"
               >
-                <p className="text-lg font-semibold text-[#0A0A0A] mb-2">
+                <p className="text-lg font-semibold text-white mb-2">
                   Are you sure you want to skip adding this?
                 </p>
-                <p className="text-sm text-slate-500 mb-6">
+                <p className="text-sm text-white/60 mb-6">
                   {stepConfig.hireText}
                 </p>
 
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setIsSkippingInline(false)}
-                    className="min-h-[48px] px-7 rounded-full bg-[#0A0A0A] text-white font-semibold text-sm active:scale-95 transition-transform cursor-pointer"
+                    className="min-h-[48px] px-7 rounded-full bg-white text-[#090B10] font-semibold text-sm active:scale-95 transition-transform cursor-pointer"
                   >
                     Add now
                   </button>
                   <button
                     onClick={handleSkipConfirm}
-                    className="min-h-[48px] px-5 text-sm font-medium text-slate-500 hover:text-[#0A0A0A] active:scale-95 transition-colors cursor-pointer"
+                    className="min-h-[48px] px-5 text-sm font-medium text-white/60 hover:text-white active:scale-95 transition-colors cursor-pointer"
                   >
                     Yes, add later
                   </button>
@@ -642,16 +680,17 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
                         onBlur={() => setHighlightOption(false)}
                         placeholder="GitHub username"
                         role="combobox"
+                        data-orbit-input="github"
                         aria-expanded={githubOptions.length > 0}
-                        className="w-full min-h-[54px] px-6 text-lg rounded-full bg-slate-50 border border-slate-200 text-[#0A0A0A] placeholder-slate-400 focus:outline-none focus:border-[#0A0A0A] focus:bg-white transition-all shadow-inner"
+                        className={`w-full min-h-[54px] px-6 text-lg rounded-full bg-white/5 border border-white/12 text-white placeholder-slate-400 focus:outline-none focus:border-white/40 focus:bg-white/10 transition-all shadow-inner ${currentStepId === 'github' ? (!githubQuery.trim() ? 'onboarding-orbit-target' : '') : currentStepId === 'leetcode' ? (!leetcodePreview ? 'onboarding-orbit-target' : '') : currentStepId === 'linkedin' ? (!linkedinInput.trim() ? 'onboarding-orbit-target' : '') : currentStepId === 'skills' ? (skillsList.length === 0 ? 'onboarding-orbit-target' : '') : ''}`}
                       />
                       {githubLoading && (
-                        <Loader2 className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 animate-spin" size={20} />
+                        <Loader2 className="absolute right-5 top-1/2 -translate-y-1/2 text-white/45 animate-spin" size={20} />
                       )}
                     </div>
 
                     {githubOptions.length > 0 && !selectedGithub && (
-                      <div className="absolute top-[62px] left-0 right-0 bg-white border border-slate-100 rounded-2xl shadow-2xl overflow-hidden z-30 divide-y divide-slate-50">
+                      <div className="absolute top-[62px] left-0 right-0 bg-[#11141B] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-30 divide-y divide-slate-50">
                         {githubOptions.map((opt) => (
                           <button
                             key={opt.login}
@@ -660,14 +699,14 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
                               setGithubQuery(opt.login)
                               setGithubOptions([])
                             }}
-                            className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-slate-50 active:bg-slate-100 transition-colors cursor-pointer"
+                            className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
                           >
-                            <img src={opt.avatar_url} alt="" className="w-8 h-8 rounded-full bg-slate-200" />
+                            <img src={opt.avatar_url} alt="" className="w-8 h-8 rounded-full bg-white/15" />
                             <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-sm text-[#0A0A0A] truncate">{opt.login}</p>
-                              {opt.name && <p className="text-xs text-slate-400 truncate">{opt.name}</p>}
+                              <p className="font-semibold text-sm text-white truncate">{opt.login}</p>
+                              {opt.name && <p className="text-xs text-white/45 truncate">{opt.name}</p>}
                             </div>
-                            <ChevronRight size={16} className="text-slate-400" />
+                            <ChevronRight size={16} className="text-white/45" />
                           </button>
                         ))}
                       </div>
@@ -677,7 +716,7 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
                       <button
                         onClick={handleAddGithub}
                         disabled={!githubQuery.trim()}
-                        className="min-h-[50px] px-9 rounded-full bg-[#0A0A0A] text-white font-semibold text-base shadow-lg disabled:opacity-40 active:scale-95 transition-transform cursor-pointer"
+                        className={`min-h-[50px] px-9 rounded-full bg-white text-[#090B10] font-semibold text-base shadow-lg disabled:opacity-40 active:scale-95 transition-transform cursor-pointer ${githubQuery.trim() ? 'onboarding-orbit-target' : ''}`}
                       >
                         Add
                       </button>
@@ -695,12 +734,12 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
                       onFocus={() => setHighlightOption(true)}
                       onBlur={() => setHighlightOption(false)}
                       placeholder="linkedin.com/in/username"
-                      className="w-full min-h-[54px] px-6 text-lg rounded-full bg-slate-50 border border-slate-200 text-[#0A0A0A] placeholder-slate-400 focus:outline-none focus:border-[#0A0A0A] focus:bg-white transition-all shadow-inner"
+                      className={`w-full min-h-[54px] px-6 text-lg rounded-full bg-white/5 border border-white/12 text-white placeholder-slate-400 focus:outline-none focus:border-white/40 focus:bg-white/10 transition-all shadow-inner ${currentStepId === 'github' ? (!githubQuery.trim() ? 'onboarding-orbit-target' : '') : currentStepId === 'leetcode' ? (!leetcodePreview ? 'onboarding-orbit-target' : '') : currentStepId === 'linkedin' ? (!linkedinInput.trim() ? 'onboarding-orbit-target' : '') : currentStepId === 'skills' ? (skillsList.length === 0 ? 'onboarding-orbit-target' : '') : ''}`}
                     />
 
                     {linkedinPreview && (
-                      <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between text-sm">
-                        <span className="font-medium text-[#0A0A0A] truncate">
+                      <div className="mt-3 p-3 bg-white/5 border border-white/12 rounded-2xl flex items-center justify-between text-sm">
+                        <span className="font-medium text-white truncate">
                           linkedin.com/in/{linkedinPreview.vanity}
                         </span>
                         <Check size={18} className="text-emerald-600 shrink-0 ml-2" />
@@ -711,7 +750,7 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
                       <button
                         onClick={handleAddLinkedin}
                         disabled={!linkedinInput.trim()}
-                        className="min-h-[50px] px-9 rounded-full bg-[#0A0A0A] text-white font-semibold text-base shadow-lg disabled:opacity-40 active:scale-95 transition-transform cursor-pointer"
+                        className={`min-h-[50px] px-9 rounded-full bg-white text-[#090B10] font-semibold text-base shadow-lg disabled:opacity-40 active:scale-95 transition-transform cursor-pointer ${linkedinInput.trim() ? 'onboarding-orbit-target' : ''}`}
                       >
                         Add
                       </button>
@@ -736,18 +775,19 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
                         }}
                         onFocus={() => setHighlightOption(true)}
                         placeholder="LeetCode username"
-                        className="w-full min-h-[54px] px-6 text-lg rounded-full bg-slate-50 border border-slate-200 text-[#0A0A0A] placeholder-slate-400 focus:outline-none focus:border-[#0A0A0A] focus:bg-white transition-all shadow-inner"
+                        data-orbit-input="leetcode"
+                        className={`w-full min-h-[54px] px-6 text-lg rounded-full bg-white/5 border border-white/12 text-white placeholder-slate-400 focus:outline-none focus:border-white/40 focus:bg-white/10 transition-all shadow-inner ${currentStepId === 'github' ? (!githubQuery.trim() ? 'onboarding-orbit-target' : '') : currentStepId === 'leetcode' ? (!leetcodePreview ? 'onboarding-orbit-target' : '') : currentStepId === 'linkedin' ? (!linkedinInput.trim() ? 'onboarding-orbit-target' : '') : currentStepId === 'skills' ? (skillsList.length === 0 ? 'onboarding-orbit-target' : '') : ''}`}
                       />
                       {leetcodeLoading && (
-                        <Loader2 className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 animate-spin" size={20} />
+                        <Loader2 className="absolute right-5 top-1/2 -translate-y-1/2 text-white/45 animate-spin" size={20} />
                       )}
                     </div>
 
                     {leetcodePreview && (
-                      <div className="mt-3 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between text-sm">
+                      <div className="mt-3 p-3.5 bg-white/5 border border-white/12 rounded-2xl flex items-center justify-between text-sm">
                         <div>
-                          <p className="font-bold text-[#0A0A0A]">{leetcodePreview.username}</p>
-                          <p className="text-xs text-slate-500">Solved: {leetcodePreview.totalSolved} problems</p>
+                          <p className="font-bold text-white">{leetcodePreview.username}</p>
+                          <p className="text-xs text-white/60">Solved: {leetcodePreview.totalSolved} problems</p>
                         </div>
                         <Check size={18} className="text-emerald-600 shrink-0" />
                       </div>
@@ -756,8 +796,8 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
                     <div className="mt-5 flex justify-center">
                       <button
                         onClick={handleAddLeetCode}
-                        disabled={!leetcodeUsername.trim()}
-                        className="min-h-[50px] px-9 rounded-full bg-[#0A0A0A] text-white font-semibold text-base shadow-lg disabled:opacity-40 active:scale-95 transition-transform cursor-pointer"
+                        disabled={!leetcodePreview}
+                        className={`min-h-[50px] px-9 rounded-full bg-white text-[#090B10] font-semibold text-base shadow-lg disabled:opacity-40 active:scale-95 transition-transform cursor-pointer ${leetcodePreview ? 'onboarding-orbit-target' : ''}`}
                       >
                         Add
                       </button>
@@ -783,16 +823,16 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
                         }
                       }}
                       className={`w-full p-6 border-2 border-dashed rounded-3xl flex flex-col items-center justify-center transition-colors ${
-                        isDragging ? 'border-[#0A0A0A] bg-slate-50' : 'border-slate-200 bg-white'
+                        isDragging ? 'border-[#0A0A0A] bg-white/5' : 'border-white/12 bg-[#11141B]'
                       }`}
                     >
-                      <UploadCloud size={32} className="text-slate-400 mb-2" />
-                      <p className="text-sm font-semibold text-[#0A0A0A] mb-1">
+                      <UploadCloud size={32} className="text-white/45 mb-2" />
+                      <p className="text-sm font-semibold text-white mb-1">
                         {resumeFile ? resumeFile.name : 'Drag and drop your resume'}
                       </p>
-                      <p className="text-xs text-slate-400 mb-4">PDF, DOCX, or TXT up to 10 MB</p>
+                      <p className="text-xs text-white/45 mb-4">PDF, DOCX, or TXT up to 10 MB</p>
 
-                      <label className="min-h-[44px] px-6 rounded-full bg-slate-100 hover:bg-slate-200 text-[#0A0A0A] font-semibold text-sm flex items-center justify-center cursor-pointer active:scale-95 transition-transform">
+                      <label className="min-h-[44px] px-6 rounded-full bg-white/10 hover:bg-white/15 text-white font-semibold text-sm flex items-center justify-center cursor-pointer active:scale-95 transition-transform">
                         <span>Choose file</span>
                         <input
                           type="file"
@@ -809,7 +849,7 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
                       <button
                         onClick={handleAddResume}
                         disabled={!resumeFile}
-                        className="min-h-[50px] px-9 rounded-full bg-[#0A0A0A] text-white font-semibold text-base shadow-lg disabled:opacity-40 active:scale-95 transition-transform cursor-pointer"
+                        className="min-h-[50px] px-9 rounded-full bg-white text-[#090B10] font-semibold text-base shadow-lg disabled:opacity-40 active:scale-95 transition-transform cursor-pointer onboarding-orbit-target"
                       >
                         Add
                       </button>
@@ -844,17 +884,17 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
                           }
                         }}
                         placeholder="Type a skill and press Enter"
-                        className="w-full min-h-[54px] px-6 text-lg rounded-full bg-slate-50 border border-slate-200 text-[#0A0A0A] placeholder-slate-400 focus:outline-none focus:border-[#0A0A0A] focus:bg-white transition-all shadow-inner"
+                        className={`w-full min-h-[54px] px-6 text-lg rounded-full bg-white/5 border border-white/12 text-white placeholder-slate-400 focus:outline-none focus:border-white/40 focus:bg-white/10 transition-all shadow-inner ${currentStepId === 'github' ? (!githubQuery.trim() ? 'onboarding-orbit-target' : '') : currentStepId === 'leetcode' ? (!leetcodePreview ? 'onboarding-orbit-target' : '') : currentStepId === 'linkedin' ? (!linkedinInput.trim() ? 'onboarding-orbit-target' : '') : currentStepId === 'skills' ? (skillsList.length === 0 ? 'onboarding-orbit-target' : '') : ''}`}
                       />
 
                       {skillSuggestions.length > 0 && (
-                        <div className="absolute top-[62px] left-0 right-0 bg-white border border-slate-100 rounded-2xl shadow-xl overflow-hidden z-30">
+                        <div className="absolute top-[62px] left-0 right-0 bg-[#11141B] border border-white/10 rounded-2xl shadow-xl overflow-hidden z-30">
                           {skillSuggestions.map((s, idx) => (
                             <button
                               key={s}
                               onClick={() => addSkill(s)}
                               className={`w-full px-5 py-2.5 text-left text-sm font-medium transition-colors cursor-pointer ${
-                                idx === activeSuggestionIndex ? 'bg-slate-100 text-[#0A0A0A]' : 'text-slate-700 hover:bg-slate-50'
+                                idx === activeSuggestionIndex ? 'bg-white/10 text-white' : 'text-white/75 hover:bg-white/5'
                               }`}
                             >
                               {s}
@@ -868,13 +908,13 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
                       {skillsList.map((skill) => (
                         <span
                           key={skill}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-slate-100 text-[#0A0A0A] text-sm font-semibold"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/10 text-white text-sm font-semibold"
                         >
                           {skill}
                           <button
                             type="button"
                             onClick={() => removeSkill(skill)}
-                            className="text-slate-400 hover:text-slate-700 cursor-pointer"
+                            className="text-white/45 hover:text-white/75 cursor-pointer"
                           >
                             <X size={14} />
                           </button>
@@ -886,7 +926,7 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
                       <button
                         onClick={handleAddSkills}
                         disabled={skillsList.length === 0}
-                        className="min-h-[50px] px-9 rounded-full bg-[#0A0A0A] text-white font-semibold text-base shadow-lg disabled:opacity-40 active:scale-95 transition-transform cursor-pointer"
+                        className="min-h-[50px] px-9 rounded-full bg-white text-[#090B10] font-semibold text-base shadow-lg disabled:opacity-40 active:scale-95 transition-transform cursor-pointer onboarding-orbit-target"
                       >
                         Add
                       </button>
@@ -899,21 +939,21 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
         </div>
 
         {backendStatus === 'warming' && (
-          <p className="text-xs text-slate-400 mt-4 text-center animate-pulse">
+          <p className="text-xs text-white/45 mt-4 text-center animate-pulse">
             Waking up the server…
           </p>
         )}
       </div>
 
       {/* 4. BOTTOM ACTION */}
-      <div className="w-full max-w-sm px-6 pb-6 flex items-center justify-center min-h-[48px]">
+      <div className="w-full max-w-sm px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex items-center justify-center min-h-[48px] shrink-0">
         {showAddLater && !isSkippingInline && (
           <motion.button
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 * DEBUG_SLOWMO }}
             onClick={() => setIsSkippingInline(true)}
-            className="text-sm font-medium text-slate-400 hover:text-[#0A0A0A] transition-colors py-2 px-4 cursor-pointer"
+            className="text-sm font-medium text-white/45 hover:text-white transition-colors py-2 px-4 cursor-pointer"
           >
             Add later
           </motion.button>

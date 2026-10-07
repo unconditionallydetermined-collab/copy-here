@@ -92,7 +92,7 @@ export default function AuthPage() {
         <div className="text-center mb-8 flex flex-col items-center">
           <Link to="/" className="inline-flex items-center justify-center mb-5 group">
             <div className="w-[72px] h-[72px] bg-white border border-slate-100 rounded-full flex items-center justify-center shadow-[0_10px_30px_rgba(0,0,0,0.06)] group-hover:scale-105 transition-transform duration-300">
-              <TrendingUp size={30} className="text-[#0A0A0A]" />
+              <img src="/favicon.svg" alt="Career Sync" className="w-9 h-9 object-contain" />
             </div>
           </Link>
           <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-[#0A0A0A]">

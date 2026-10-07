@@ -1042,11 +1042,12 @@ export default function LandingPage() {
       {/* 5. Three Trust Ticks Stacked VERTICALLY moved further down near bottom */}
       <div
         ref={ticksRef}
-        className="absolute bottom-6 sm:bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-start gap-2 text-xs text-white/50 pointer-events-auto z-20"
+        className="absolute bottom-6 sm:bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-start gap-2 text-xs text-white/50 pointer-events-auto z-20 max-w-[calc(100vw-2rem)]"
       >
-        <div className="inline-flex items-center gap-2">
+        <div className="inline-flex items-center gap-2.5 pl-1">
+          <img src="/favicon.svg" alt="" className="w-[15px] h-[15px] object-contain shrink-0" />
           <Check size={14} className="text-emerald-400 flex-shrink-0" />
-          <span>No credit card required</span>
+          <span className="pl-0.5">No credit card required</span>
         </div>
         <div className="inline-flex items-center gap-2">
           <Check size={14} className="text-emerald-400 flex-shrink-0" />
