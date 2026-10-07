@@ -10,7 +10,6 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
   const wavesRef = useRef([])
   const wakesRef = useRef([])
 
-  // Expose triggerSlam and addWake to parent
   useImperativeHandle(ref, () => ({
     triggerSlam: (clientX, clientY, options = {}) => {
       triggerSlamInternal(clientX, clientY, options)
@@ -27,25 +26,25 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
     const x = clientX !== undefined ? clientX - rect.left : rect.width / 2
     const y = clientY !== undefined ? clientY - rect.top : rect.height / 2
 
-    const intensity = options.intensity || 380
-    const carveRadius = options.carveRadius || 36
+    // Toned-down splash intensity
+    const intensity = options.intensity || 180
+    const carveRadius = options.carveRadius || 32
 
-    // Outward displacement wave
     wavesRef.current.push({
       x,
       y,
-      radius: carveRadius * 0.5,
-      speed: 460,
-      maxRadius: Math.max(rect.width, rect.height) * 0.95,
+      radius: carveRadius * 0.6,
+      speed: 380,
+      maxRadius: Math.max(rect.width, rect.height) * 0.85,
       intensity,
-      width: 64,
+      width: 52,
       life: 1.0,
-      decay: 0.85,
+      decay: 0.7,
     })
 
-    // Carve out fluid: direct radial outward displacement forming an impact crater
+    // Gentle displacement carving without aggressive shockwave
     const dots = dotsRef.current
-    const blastRadius = carveRadius * 2.8
+    const blastRadius = carveRadius * 2.2
     for (let i = 0; i < dots.length; i++) {
       const dot = dots[i]
       const dx = dot.ox - x
@@ -53,9 +52,8 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
       const dist = Math.sqrt(dx * dx + dy * dy)
 
       if (dist < blastRadius && dist > 0.001) {
-        // Carve cavity inside icon radius, crest water just outside
-        const factor = dist < carveRadius ? 1.0 : Math.max(0, 1 - (dist - carveRadius) / (blastRadius - carveRadius))
-        const force = factor * (intensity * 0.9)
+        const factor = dist < carveRadius ? 0.75 : Math.max(0, 1 - (dist - carveRadius) / (blastRadius - carveRadius))
+        const force = factor * (intensity * 0.45)
         dot.vx += (dx / dist) * force
         dot.vy += (dy / dist) * force
       }
@@ -73,16 +71,16 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
     const x = clientX - rect.left
     const y = clientY - rect.top
 
-    // Soft wake ripple
-    if (wakesRef.current.length < 35) {
+    // Subdued, subtle wake ripple
+    if (wakesRef.current.length < 25) {
       wakesRef.current.push({
         x,
         y,
-        radius: 4,
-        speed: 140,
-        intensity: 28 * strength,
-        life: 1.0,
-        decay: 1.4,
+        radius: 3,
+        speed: 90,
+        intensity: 8 * strength,
+        life: 0.9,
+        decay: 1.6,
       })
     }
   }
@@ -98,8 +96,8 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
 
     const SPACING = Math.max(22, Math.min(28, Math.floor(Math.min(width, height) / 32)))
     const BASE_DOT_RADIUS = 1.3
-    const K = 20 // Natural spring stiffness
-    const C = 2.1 // Smooth, silky fluid damping without sudden cutoff
+    const K = 22
+    const C = 2.4
 
     const initGrid = () => {
       dpr = window.devicePixelRatio || 1
@@ -121,14 +119,7 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
         for (let c = 0; c < cols; c++) {
           const ox = offsetX + c * SPACING
           const oy = offsetY + r * SPACING
-          dots.push({
-            ox,
-            oy,
-            x: ox,
-            y: oy,
-            vx: 0,
-            vy: 0,
-          })
+          dots.push({ ox, oy, x: ox, y: oy, vx: 0, vy: 0 })
         }
       }
       dotsRef.current = dots
@@ -142,7 +133,7 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
     window.addEventListener('resize', handleResize)
 
     const handlePointerDown = (e) => {
-      triggerSlamInternal(e.clientX, e.clientY, { intensity: 320 })
+      triggerSlamInternal(e.clientX, e.clientY, { intensity: 160 })
     }
 
     canvas.addEventListener('pointerdown', handlePointerDown)
@@ -158,13 +149,12 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
       const waves = wavesRef.current
       const wakes = wakesRef.current
 
-      // 1. Advance impact waves
+      // 1. Advance waves
       for (let i = waves.length - 1; i >= 0; i--) {
         const w = waves[i]
         w.radius += w.speed * dt
         w.life -= dt * w.decay
-        // Smooth exponential damping instead of abrupt step
-        w.intensity *= Math.exp(-1.8 * dt)
+        w.intensity *= Math.exp(-1.6 * dt)
 
         const waveFrontWidth = w.width
         const rMin = Math.max(0, w.radius - waveFrontWidth)
@@ -181,31 +171,29 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
           if (distSq >= rMinSq && distSq <= rMaxSq && distSq > 0.0001) {
             const dist = Math.sqrt(distSq)
             const diff = Math.abs(dist - w.radius)
-            // Smooth cosine bell-curve for wavefront impulse
             const radialFalloff = 0.5 * (1 + Math.cos((Math.PI * diff) / waveFrontWidth))
-            const distanceAttenuation = 1 / (1 + dist * 0.002)
+            const distanceAttenuation = 1 / (1 + dist * 0.0025)
             const impulse = w.intensity * radialFalloff * distanceAttenuation
 
-            dot.vx += (dx / dist) * impulse * dt * 28
-            dot.vy += (dy / dist) * impulse * dt * 28
+            dot.vx += (dx / dist) * impulse * dt * 20
+            dot.vy += (dy / dist) * impulse * dt * 20
           }
         }
 
-        // Natural soft fadeout condition
         if (w.life <= 0 || w.intensity < 0.2 || w.radius > w.maxRadius) {
           waves.splice(i, 1)
         }
       }
 
-      // 2. Advance moving icon wakes
+      // 2. Advance subtle wakes
       for (let i = wakes.length - 1; i >= 0; i--) {
         const wk = wakes[i]
         wk.radius += wk.speed * dt
         wk.life -= dt * wk.decay
-        wk.intensity *= Math.exp(-2.4 * dt)
+        wk.intensity *= Math.exp(-2.6 * dt)
 
-        const rMin = Math.max(0, wk.radius - 24)
-        const rMax = wk.radius + 24
+        const rMin = Math.max(0, wk.radius - 18)
+        const rMax = wk.radius + 18
         const rMinSq = rMin * rMin
         const rMaxSq = rMax * rMax
 
@@ -218,10 +206,10 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
           if (distSq >= rMinSq && distSq <= rMaxSq && distSq > 0.0001) {
             const dist = Math.sqrt(distSq)
             const diff = Math.abs(dist - wk.radius)
-            const falloff = 0.5 * (1 + Math.cos((Math.PI * diff) / 24))
+            const falloff = 0.5 * (1 + Math.cos((Math.PI * diff) / 18))
             const impulse = wk.intensity * falloff
-            dot.vx += (dx / dist) * impulse * dt * 18
-            dot.vy += (dy / dist) * impulse * dt * 18
+            dot.vx += (dx / dist) * impulse * dt * 8
+            dot.vy += (dy / dist) * impulse * dt * 8
           }
         }
 
@@ -246,7 +234,7 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
         dot.y += dot.vy * dt
       }
 
-      // 4. Render dots with continuous smooth luminance and radius gradient
+      // 4. Render dots smoothly
       ctx.fillStyle = '#0a0a0a'
       ctx.fillRect(0, 0, width, height)
 
@@ -256,15 +244,13 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
         const dy = dot.y - dot.oy
         const disp = Math.sqrt(dx * dx + dy * dy)
 
-        // Smooth normalized excitation factor [0 .. 1]
-        const energy = Math.min(1, disp / 12)
-        const alpha = 0.35 + 0.6 * energy
-        const radius = BASE_DOT_RADIUS + 0.9 * energy
+        const energy = Math.min(1, disp / 10)
+        const alpha = 0.35 + 0.55 * energy
+        const radius = BASE_DOT_RADIUS + 0.7 * energy
 
-        // Smooth transition from calm muted zinc to brilliant fluid crest
-        ctx.fillStyle = energy > 0.1
+        ctx.fillStyle = energy > 0.08
           ? `rgba(${Math.round(200 + 55 * energy)}, ${Math.round(210 + 45 * energy)}, 255, ${alpha.toFixed(3)})`
-          : 'rgba(180, 185, 195, 0.38)'
+          : 'rgba(180, 185, 195, 0.35)'
 
         ctx.beginPath()
         ctx.arc(dot.x, dot.y, radius, 0, Math.PI * 2)

@@ -48,11 +48,12 @@ export default function LandingPage() {
   const [isSlamming, setIsSlamming] = useState(false)
   const [displayCount, setDisplayCount] = useState(PLATFORM_CONFIG.github.targetPercent)
   const [reducedMotion, setReducedMotion] = useState(false)
-  const [badgeRadius, setBadgeRadius] = useState(200)
+  const [badgeRadius, setBadgeRadius] = useState(240)
 
   const rippleRef = useRef(null)
   const centerSlotRef = useRef(null)
 
+  const activeStageIdRef = useRef('github')
   const anglesRef = useRef({
     github: 0,
     leetcode: 90,
@@ -67,9 +68,9 @@ export default function LandingPage() {
     linkedin: true,
     skills: true,
   })
+  const orbitingRef = useRef(orbiting)
+  orbitingRef.current = orbiting
 
-  const lastPoppedRef = useRef('github')
-  const stageLockRef = useRef(false)
   const animationFrameRef = useRef(null)
   const countIntervalRef = useRef(null)
   const wakeThrottleRef = useRef(0)
@@ -82,23 +83,25 @@ export default function LandingPage() {
     return () => mq.removeEventListener('change', handler)
   }, [])
 
+  // Keep orbit wide enough to never overlap text/buttons
   useEffect(() => {
     const calcRadius = () => {
       const vw = window.innerWidth
       const vh = window.innerHeight
-      const r = Math.min(vw * 0.42, vh * 0.36, 260)
-      setBadgeRadius(Math.max(r, 110))
+      // Minimum 200px radius to cleanly clear center card
+      const r = Math.max(200, Math.min(vw * 0.44, vh * 0.40, 290))
+      setBadgeRadius(r)
     }
     calcRadius()
     window.addEventListener('resize', calcRadius)
     return () => window.removeEventListener('resize', calcRadius)
   }, [])
 
-  // Orbit animation loop with wake generation
+  // Orbit animation loop with gentle wake emission
   useEffect(() => {
     if (reducedMotion) return
     let lastTime = performance.now()
-    const speed = 0.055 / DEBUG_SLOWMO
+    const speed = 0.052 / DEBUG_SLOWMO
 
     const tick = (now) => {
       const delta = now - lastTime
@@ -110,20 +113,19 @@ export default function LandingPage() {
         const centerY = window.innerHeight / 2
 
         wakeThrottleRef.current += 1
-        const emitWake = wakeThrottleRef.current % 4 === 0
+        const emitWake = wakeThrottleRef.current % 8 === 0
 
         BADGES.forEach((id) => {
-          if (orbiting[id]) {
+          if (orbitingRef.current[id]) {
             next[id] = (next[id] + speed * delta) % 360
             if (emitWake && rippleRef.current) {
               const deg = next[id]
               const rad = ((deg - 90) * Math.PI) / 180
               const bx = centerX + Math.cos(rad) * badgeRadius
               const by = centerY + Math.sin(rad) * badgeRadius
-              // Tangential direction for wake ripple
-              const vx = -Math.sin(rad) * 1.5
-              const vy = Math.cos(rad) * 1.5
-              rippleRef.current.addWake(bx, by, vx, vy, 0.7)
+              const vx = -Math.sin(rad) * 0.8
+              const vy = Math.cos(rad) * 0.8
+              rippleRef.current.addWake(bx, by, vx, vy, 0.3)
             }
           }
         })
@@ -136,9 +138,9 @@ export default function LandingPage() {
 
     animationFrameRef.current = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(animationFrameRef.current)
-  }, [reducedMotion, orbiting, badgeRadius])
+  }, [reducedMotion, badgeRadius])
 
-  // Scheduler logic for slamming with velocity
+  // Continuous cycling scheduler that won't get cancelled
   useEffect(() => {
     if (reducedMotion) {
       setActiveStageId('skills')
@@ -146,56 +148,47 @@ export default function LandingPage() {
       return
     }
 
-    let timer = null
-    let active = true
+    let isDestroyed = false
 
-    const popNext = () => {
-      if (!active || stageLockRef.current || document.visibilityState !== 'visible') return
+    const cycleToNext = () => {
+      if (isDestroyed || document.visibilityState !== 'visible') return
 
-      const candidates = BADGES.filter((b) => orbiting[b] && b !== lastPoppedRef.current)
-      if (candidates.length === 0) return
+      const currentActive = activeStageIdRef.current
+      const currentIndex = BADGES.indexOf(currentActive)
+      const nextId = BADGES[(currentIndex + 1) % BADGES.length]
 
-      let closest = candidates[0]
-      let minDiff = 360
-      candidates.forEach((b) => {
-        const diff = (60 - anglesRef.current[b] + 360) % 360
-        if (diff < minDiff) {
-          minDiff = diff
-          closest = b
-        }
-      })
+      // Exit current
+      setExitingStageId(currentActive)
+      setTimeout(() => {
+        if (isDestroyed) return
+        setOrbiting((prev) => ({ ...prev, [currentActive]: true }))
+        anglesRef.current[currentActive] = 230
+        setExitingStageId(null)
+      }, 220 * DEBUG_SLOWMO)
 
-      stageLockRef.current = true
-      lastPoppedRef.current = closest
-
-      if (activeStageId) {
-        setExitingStageId(activeStageId)
-        setTimeout(() => {
-          setOrbiting((prev) => ({ ...prev, [activeStageId]: true }))
-          anglesRef.current[activeStageId] = 240
-          setExitingStageId(null)
-        }, 220 * DEBUG_SLOWMO)
-      }
-
-      setOrbiting((prev) => ({ ...prev, [closest]: false }))
-      setActiveStageId(closest)
+      // Enter next
+      setOrbiting((prev) => ({ ...prev, [nextId]: false }))
+      activeStageIdRef.current = nextId
+      setActiveStageId(nextId)
       setIsSlamming(true)
 
-      // Trigger fluid impact & carved crater at moment of contact (~310ms into animation)
+      // Impact slam trigger
       setTimeout(() => {
+        if (isDestroyed) return
         if (centerSlotRef.current && rippleRef.current) {
           const rect = centerSlotRef.current.getBoundingClientRect()
           const cx = rect.left + rect.width / 2
           const cy = rect.top + rect.height / 2
-          rippleRef.current.triggerSlam(cx, cy, { intensity: 480, carveRadius: 36 })
+          rippleRef.current.triggerSlam(cx, cy, { intensity: 200, carveRadius: 32 })
         }
       }, 310 * DEBUG_SLOWMO)
 
       setTimeout(() => {
-        setIsSlamming(false)
+        if (!isDestroyed) setIsSlamming(false)
       }, 500 * DEBUG_SLOWMO)
 
-      const target = PLATFORM_CONFIG[closest].targetPercent
+      // Counter animation
+      const target = PLATFORM_CONFIG[nextId].targetPercent
       let current = 0
       setDisplayCount(0)
       clearInterval(countIntervalRef.current)
@@ -209,23 +202,16 @@ export default function LandingPage() {
           setDisplayCount(current)
         }
       }, stepTime)
-
-      const cooldown = Math.floor(5200 + Math.random() * 5000) * DEBUG_SLOWMO
-      timer = setTimeout(() => {
-        stageLockRef.current = false
-        popNext()
-      }, cooldown)
     }
 
-    const firstTimer = setTimeout(popNext, 4500 * DEBUG_SLOWMO)
+    const interval = setInterval(cycleToNext, 5200 * DEBUG_SLOWMO)
 
     return () => {
-      active = false
-      clearTimeout(firstTimer)
-      clearTimeout(timer)
+      isDestroyed = true
+      clearInterval(interval)
       clearInterval(countIntervalRef.current)
     }
-  }, [reducedMotion, orbiting, activeStageId])
+  }, [reducedMotion])
 
   const activeConfig = activeStageId ? PLATFORM_CONFIG[activeStageId] : null
   const exitingConfig = exitingStageId ? PLATFORM_CONFIG[exitingStageId] : null
@@ -238,13 +224,11 @@ export default function LandingPage() {
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       }}
     >
-      {/* ── Interactive Water Ripple Surface Canvas ── */}
       <WaterRippleCanvas ref={rippleRef} className="z-0" />
 
-      {/* ── Ambient Orbit Ring ── */}
+      {/* Orbit Layer */}
       <div
-        className="relative z-10 flex items-center justify-center pointer-events-none"
-        style={{ width: badgeRadius * 2 + 100, height: badgeRadius * 2 + 100 }}
+        className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none"
       >
         {!reducedMotion &&
           BADGES.map((id) => {
@@ -262,7 +246,7 @@ export default function LandingPage() {
               <div
                 key={id}
                 aria-label={cfg.name}
-                className="absolute w-12 h-12 rounded-full bg-slate-900/80 backdrop-blur-md shadow-xl border border-white/10 flex items-center justify-center will-change-transform transition-opacity"
+                className="absolute w-12 h-12 rounded-full bg-slate-900/80 backdrop-blur-md shadow-xl border border-white/10 flex items-center justify-center will-change-transform"
                 style={{
                   transform: `translate3d(${x}px, ${y}px, 0)`,
                   transitionDuration: `${120 * DEBUG_SLOWMO}ms`,
@@ -272,83 +256,80 @@ export default function LandingPage() {
               </div>
             )
           })}
+      </div>
 
-        {/* ── Center Stage & Headline ── */}
-        <div className="relative z-10 flex flex-col items-center text-center max-w-sm px-4 pointer-events-auto">
-          <h1 className="text-[clamp(28px,6vmin,54px)] font-extrabold tracking-tight text-white leading-tight drop-shadow-md">
-            Do you have
-          </h1>
+      {/* Center Stage & Content (Higher z-index, guaranteed no overlap) */}
+      <div className="relative z-20 flex flex-col items-center text-center max-w-sm px-4 pointer-events-auto">
+        <h1 className="text-[clamp(28px,6vmin,54px)] font-extrabold tracking-tight text-white leading-tight drop-shadow-md">
+          Do you have
+        </h1>
 
-          {/* Reserved Stage Slot */}
-          <div ref={centerSlotRef} className="h-16 w-16 my-3 flex items-center justify-center relative">
-            {exitingConfig && (
-              <div
-                className="absolute w-14 h-14 rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/20 flex items-center justify-center transition-all"
-                style={{
-                  transform: 'translateY(55px) scale(0.92, 1.1)',
-                  opacity: 0,
-                  transitionDuration: `${200 * DEBUG_SLOWMO}ms`,
-                  transitionTimingFunction: 'cubic-bezier(0.77, 0, 0.175, 1)',
-                }}
-              >
-                {React.createElement(exitingConfig.icon, { size: 26, color: exitingConfig.color })}
-              </div>
-            )}
+        <div ref={centerSlotRef} className="h-16 w-16 my-3 flex items-center justify-center relative">
+          {exitingConfig && (
+            <div
+              className="absolute w-14 h-14 rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/20 flex items-center justify-center transition-all"
+              style={{
+                transform: 'translateY(55px) scale(0.92, 1.1)',
+                opacity: 0,
+                transitionDuration: `${200 * DEBUG_SLOWMO}ms`,
+                transitionTimingFunction: 'cubic-bezier(0.77, 0, 0.175, 1)',
+              }}
+            >
+              {React.createElement(exitingConfig.icon, { size: 26, color: exitingConfig.color })}
+            </div>
+          )}
 
-            {activeConfig ? (
-              <div
-                className={`w-14 h-14 rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/20 flex items-center justify-center ${
-                  isSlamming ? 'animate-icon-slam' : 'transition-transform'
-                }`}
-                style={
-                  !isSlamming
-                    ? {
-                        transform: 'scale(1)',
-                        transitionDuration: `${260 * DEBUG_SLOWMO}ms`,
-                        transitionTimingFunction: 'cubic-bezier(0.23, 1, 0.32, 1)',
-                      }
-                    : undefined
-                }
-              >
-                {React.createElement(activeConfig.icon, { size: 26, color: activeConfig.color })}
-              </div>
-            ) : (
-              <div className="w-14 h-14 rounded-full border-2 border-dashed border-slate-700" />
-            )}
-          </div>
-
-          {/* Stage Label & Stat */}
-          <div aria-live="polite" className="h-14 flex flex-col items-center justify-center">
-            {activeConfig ? (
-              <div
-                className="flex flex-col items-center transition-all"
-                style={{
-                  animation: `slideUpFade ${220 * DEBUG_SLOWMO}ms cubic-bezier(0.23, 1, 0.32, 1) forwards`,
-                }}
-              >
-                <span className="text-xs uppercase font-bold tracking-wider text-slate-400">
-                  {activeConfig.label}
-                </span>
-                <p className="text-[clamp(14px,2.2vmin,18px)] font-medium text-slate-300 mt-0.5">
-                  <span className="font-bold text-white tabular-nums">
-                    {displayCount}%
-                  </span>{' '}
-                  of companies hire through {activeConfig.label.toLowerCase()}
-                </p>
-              </div>
-            ) : (
-              <span className="text-xs text-slate-500 font-medium">Waiting for credentials...</span>
-            )}
-          </div>
-
-          {/* Call to action button with native active feedback & touch-manipulation */}
-          <Link
-            to="/auth"
-            className="mt-6 inline-flex items-center justify-center min-h-[48px] px-8 py-3 rounded-xl bg-white text-slate-950 font-semibold text-base shadow-xl shadow-black/50 active:scale-[0.97] transition-all duration-150 ease-out hover:bg-slate-100 touch-manipulation select-none"
-          >
-            Get a job
-          </Link>
+          {activeConfig ? (
+            <div
+              className={`w-14 h-14 rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/20 flex items-center justify-center ${
+                isSlamming ? 'animate-icon-slam' : 'transition-transform'
+              }`}
+              style={
+                !isSlamming
+                  ? {
+                      transform: 'scale(1)',
+                      transitionDuration: `${260 * DEBUG_SLOWMO}ms`,
+                      transitionTimingFunction: 'cubic-bezier(0.23, 1, 0.32, 1)',
+                    }
+                  : undefined
+              }
+            >
+              {React.createElement(activeConfig.icon, { size: 26, color: activeConfig.color })}
+            </div>
+          ) : (
+            <div className="w-14 h-14 rounded-full border-2 border-dashed border-slate-700" />
+          )}
         </div>
+
+        <div aria-live="polite" className="h-14 flex flex-col items-center justify-center">
+          {activeConfig ? (
+            <div
+              className="flex flex-col items-center transition-all"
+              style={{
+                animation: `slideUpFade ${220 * DEBUG_SLOWMO}ms cubic-bezier(0.23, 1, 0.32, 1) forwards`,
+              }}
+            >
+              <span className="text-xs uppercase font-bold tracking-wider text-slate-400">
+                {activeConfig.label}
+              </span>
+              <p className="text-[clamp(14px,2.2vmin,18px)] font-medium text-slate-300 mt-0.5">
+                <span className="font-bold text-white tabular-nums">
+                  {displayCount}%
+                </span>{' '}
+                of companies hire through {activeConfig.label.toLowerCase()}
+              </p>
+            </div>
+          ) : (
+            <span className="text-xs text-slate-500 font-medium">Waiting for credentials...</span>
+          )}
+        </div>
+
+        <Link
+          to="/auth"
+          className="mt-6 inline-flex items-center justify-center min-h-[48px] px-8 py-3 rounded-xl bg-white text-slate-950 font-semibold text-base shadow-xl shadow-black/50 active:scale-[0.97] transition-all duration-150 ease-out hover:bg-slate-100 touch-manipulation select-none"
+        >
+          Get a job
+        </Link>
       </div>
     </main>
   )
