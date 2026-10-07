@@ -13,6 +13,7 @@ import AboutPage     from './pages/AboutPage'
 import DownloadsPage from './pages/DownloadsPage'
 import AuthPage      from './pages/AuthPage'
 import Dashboard     from './pages/Dashboard'
+import ChecklistPage from './pages/ChecklistPage'
 import ProfilePage   from './pages/ProfilePage'
 import ResumePage    from './pages/ResumePage'
 import SkillsPage    from './pages/SkillsPage'
@@ -102,6 +103,7 @@ function AppRoutes() {
         <Route path="/auth" element={<PublicRoute><AuthPage /></PublicRoute>} />
 
         <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+          <Route path="/checklist"    element={<ChecklistPage />} />
           <Route path="/dashboard"    element={<Dashboard />} />
           <Route path="/profile"      element={<ProfilePage />} />
           <Route path="/resume"       element={<ResumePage />} />
