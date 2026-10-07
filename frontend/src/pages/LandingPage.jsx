@@ -222,8 +222,11 @@ export default function LandingPage() {
     const vw = window.innerWidth
     const vh = window.innerHeight
 
-    let pad = vw < 640 ? 20 : 28
-    let iconRadius = vw < 360 ? 16 : vw < 480 ? 20 : 27
+    const isSmallMobile = vw < 360
+    const isMobile = vw < 640
+
+    let pad = isSmallMobile ? 10 : isMobile ? 14 : 24
+    let iconRadius = isSmallMobile ? 18 : isMobile ? 21 : 27
 
     const slotEl = centerSlotRef.current
     let slotCenterX = vw / 2
@@ -236,44 +239,29 @@ export default function LandingPage() {
 
     setCenterCoords({ x: slotCenterX, y: slotCenterY })
 
-    // Measure the main content block (heading, slot, caption, CTA, sign in)
-    const elements = [
-      heroWrapperRef.current,
-      centerSlotRef.current,
-      buttonRef.current,
-      signInRef.current,
-    ].filter(Boolean)
+    // Viewport bounds: guarantee orbs never clip outside the screen
+    const maxHorizontalR = (vw / 2) - iconRadius - (isMobile ? 12 : 24)
+    const maxVerticalR = Math.min(
+      slotCenterY - iconRadius - 20,
+      (vh - slotCenterY) - iconRadius - (isMobile ? 70 : 90)
+    )
+    const maxSafeR = Math.max(90, Math.min(maxHorizontalR, maxVerticalR))
 
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-    for (const el of elements) {
-      const r = el.getBoundingClientRect()
-      minX = Math.min(minX, r.left)
-      minY = Math.min(minY, r.top)
-      maxX = Math.max(maxX, r.right)
-      maxY = Math.max(maxY, r.bottom)
+    const slotRadius = 33
+    const minClearR = slotRadius + iconRadius + pad + 20
+
+    const preferredR = isMobile
+      ? Math.max(minClearR, Math.min(maxSafeR, vw * 0.38))
+      : Math.max(220, Math.min(vw * 0.42, vh * 0.40, 320))
+
+    const R = Math.max(minClearR, Math.min(preferredR, maxSafeR))
+
+    const exclusionRect = {
+      left: slotCenterX - slotRadius - pad,
+      top: slotCenterY - slotRadius - pad,
+      right: slotCenterX + slotRadius + pad,
+      bottom: slotCenterY + slotRadius + pad,
     }
-
-    let exclusionRect = {
-      left: minX - pad,
-      top: minY - pad,
-      right: maxX + pad,
-      bottom: maxY + pad,
-    }
-
-    const corners = [
-      [exclusionRect.left, exclusionRect.top],
-      [exclusionRect.right, exclusionRect.top],
-      [exclusionRect.left, exclusionRect.bottom],
-      [exclusionRect.right, exclusionRect.bottom],
-    ]
-    let maxCornerDist = 0
-    for (const [cx, cy] of corners) {
-      maxCornerDist = Math.max(maxCornerDist, Math.hypot(cx - slotCenterX, cy - slotCenterY))
-    }
-
-    let requiredR = maxCornerDist + iconRadius + pad
-    const preferredR = Math.max(220, Math.min(vw * 0.45, vh * 0.42, 320))
-    const R = Math.max(preferredR, requiredR)
 
     geomRef.current = {
       slotCenterX,
@@ -694,13 +682,13 @@ export default function LandingPage() {
 
         p.opacity += (op - p.opacity) * 0.15
 
-        // Bottom edge gradient: orbs smoothly fade out approaching bottom edge
+        // Bottom edge gradient: keep orbs visible across entire orbit, fade only right at footer
         const screenY = geom.slotCenterY + p.y
         const distFromBottom = geom.height - screenY
-        const BOTTOM_FADE_MARGIN = Math.max(220, Math.min(320, geom.height * 0.3))
+        const BOTTOM_FADE_MARGIN = Math.min(80, geom.height * 0.12)
         const bottomFactor = Math.min(1, Math.max(0, distFromBottom / BOTTOM_FADE_MARGIN))
         const bottomGradient = 0.5 - 0.5 * Math.cos(bottomFactor * Math.PI)
-        const effectiveOpacity = p.opacity * bottomGradient
+        const effectiveOpacity = p.opacity * Math.max(0.35, bottomGradient)
 
         // Glow breathing (0.8 to 1.0 intensity)
         const d = DRIFT_CONFIG[id] || DRIFT_CONFIG.github
