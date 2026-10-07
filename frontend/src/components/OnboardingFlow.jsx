@@ -373,6 +373,7 @@ export default function OnboardingFlow({ initialSlotId = 'github' }) {
 
     const updatedState = saveOnboardingState({
       ...dataToPersist,
+      hydration: {},
       step: currentStepId,
       skipped: isSkipped
         ? Array.from(new Set([...(savedData.skipped || []), currentStepId]))

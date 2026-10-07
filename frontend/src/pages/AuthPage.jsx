@@ -24,10 +24,13 @@ export default function AuthPage() {
     const onboarding = getOnboardingState()
     if (onboarding && (onboarding.github || onboarding.leetcode || onboarding.linkedin || onboarding.skills?.length > 0 || onboarding.resume)) {
       setHydrating(true)
-      await hydrateProfileFromOnboarding((status) => {
+      const result = await hydrateProfileFromOnboarding((status) => {
         setHydrationStatus(status)
       })
       setHydrating(false)
+      if (!result.success) {
+        toast.error(result.error || 'Your details are saved on this device and will need to be synced later.', { duration: 6000 })
+      }
     }
     navigate('/dashboard')
   }

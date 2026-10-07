@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { Lightbulb, Code2, Check } from 'lucide-react'
 import { Github, Linkedin } from '../components/Icons'
 import WaterRippleCanvas from '../components/WaterRippleCanvas'
+import OnboardingFlow from '../components/OnboardingFlow'
 
 const PLATFORM_CONFIG = {
   github: {
@@ -1035,6 +1036,8 @@ export default function LandingPage() {
           </Link>
         </div>
       </div>
+
+      {showOnboarding && <OnboardingFlow />}
 
       {/* 5. Three Trust Ticks Stacked VERTICALLY moved further down near bottom */}
       <div

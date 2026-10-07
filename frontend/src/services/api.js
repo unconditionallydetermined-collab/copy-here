@@ -87,25 +87,27 @@ let pingTimeoutId = null
 let currentBackoff = 2000
 
 const doPing = async () => {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 10000)
   try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 2000)
-
-    await fetch(HEALTH_URL, {
+    const response = await fetch(HEALTH_URL, {
       method: 'GET',
-      mode: 'no-cors',
+      mode: 'cors',
+      cache: 'no-store',
       signal: controller.signal,
     })
-    clearTimeout(timer)
-
+    if (!response.ok) throw new Error(`Health check returned ${response.status}`)
+    const health = await response.json().catch(() => null)
+    if (health?.status && health.status !== 'UP') {
+      throw new Error(`Backend health is ${health.status}`)
+    }
     notifyStatus('ready')
     currentBackoff = 2000
   } catch {
-    if (backendStatus !== 'ready') {
-      notifyStatus('warming')
-      currentBackoff = Math.min(30000, currentBackoff * 2)
-    }
+    notifyStatus('warming')
+    currentBackoff = Math.min(30000, currentBackoff * 2)
   } finally {
+    clearTimeout(timer)
     scheduleNextPing()
   }
 }
@@ -163,85 +165,82 @@ export const waitForBackendReady = async (timeoutMs = 60000) => {
 }
 
 /* Hydration */
-export const hydrateProfileFromOnboarding = async (onProgress) => {
-  const state = getOnboardingState()
+let hydrationPromise = null
+
+const performOnboardingHydration = async (onProgress) => {
+  let state = getOnboardingState()
   if (!state) return { success: true }
 
   try {
-    await waitForBackendReady(60000)
+    const backendReady = await waitForBackendReady(60000)
+    if (!backendReady) {
+      return { success: false, error: 'The server is still starting. Your onboarding details are saved on this device; please try again shortly.' }
+    }
+
+    const complete = (key) => !!state.hydration?.[key]
+    const checkpoint = (key) => {
+      const updated = saveOnboardingState({
+        hydration: { ...(state.hydration || {}), [key]: true },
+      })
+      if (!updated) throw new Error('Could not save onboarding progress locally')
+      state = updated
+    }
     const { github, leetcode, linkedin, skills, resume } = state
 
-    if (github?.username || leetcode?.username || linkedin?.url) {
-      try {
-        if (onProgress) onProgress('Updating profile information...')
-        await profileApi.update({
-          githubUsername: github?.username || '',
-          leetcodeUsername: leetcode?.username || '',
-          linkedinUrl: linkedin?.url || '',
-        })
-        saveOnboardingState({ github: null, leetcode: null, linkedin: null })
-      } catch (e) {
-        logger.warn('Hydration', 'Profile update failed', { error: e.message })
-      }
+    if ((github?.username || leetcode?.username || linkedin?.url) && !complete('profileUpdated')) {
+      if (onProgress) onProgress('Updating profile information...')
+      await profileApi.update({
+        githubUsername: github?.username || '',
+        leetcodeUsername: leetcode?.username || '',
+        linkedinUrl: linkedin?.url || '',
+      })
+      checkpoint('profileUpdated')
     }
-
-    if (github?.username) {
-      try {
-        if (onProgress) onProgress('Syncing GitHub activity...')
-        await githubApi.sync(github.username)
-      } catch (e) {
-        logger.warn('Hydration', 'GitHub sync failed', { error: e.message })
-      }
+    if (github?.username && !complete('githubSynced')) {
+      if (onProgress) onProgress('Syncing GitHub activity...')
+      await githubApi.sync(github.username)
+      checkpoint('githubSynced')
     }
-
-    if (leetcode?.username) {
-      try {
-        if (onProgress) onProgress('Syncing LeetCode stats...')
-        await leetcodeApi.sync(leetcode.username)
-      } catch (e) {
-        logger.warn('Hydration', 'LeetCode sync failed', { error: e.message })
-      }
+    if (leetcode?.username && !complete('leetcodeSynced')) {
+      if (onProgress) onProgress('Syncing LeetCode stats...')
+      await leetcodeApi.sync(leetcode.username)
+      checkpoint('leetcodeSynced')
     }
-
-    if (linkedin?.url) {
-      try {
-        if (onProgress) onProgress('Saving LinkedIn profile...')
-        await linkedinApi.save({ profileUrl: linkedin.url })
-      } catch (e) {
-        logger.warn('Hydration', 'LinkedIn save failed', { error: e.message })
-      }
+    if (linkedin?.url && !complete('linkedinSaved')) {
+      if (onProgress) onProgress('Saving LinkedIn profile...')
+      await linkedinApi.save({ profileUrl: linkedin.url })
+      checkpoint('linkedinSaved')
     }
-
-    if (Array.isArray(skills) && skills.length > 0) {
-      try {
-        if (onProgress) onProgress('Adding top skills...')
-        await skillsApi.addBatch(skills)
-        saveOnboardingState({ skills: [] })
-      } catch (e) {
-        logger.warn('Hydration', 'Skills batch failed', { error: e.message })
-      }
+    if (Array.isArray(skills) && skills.length > 0 && !complete('skillsSaved')) {
+      if (onProgress) onProgress('Adding top skills...')
+      await skillsApi.addBatch(skills)
+      checkpoint('skillsSaved')
     }
-
-    if (resume?.fileName) {
-      try {
-        const file = await getResumeFile()
-        if (file) {
-          if (onProgress) onProgress('Uploading resume...')
-          const fd = new FormData()
-          fd.append('file', file)
-          await resumeApi.upload(fd)
-          saveOnboardingState({ resume: null })
-        }
-      } catch (e) {
-        logger.warn('Hydration', 'Resume upload failed', { error: e.message })
-      }
+    if (resume?.fileName && !complete('resumeUploaded')) {
+      const file = await getResumeFile()
+      if (!file) throw new Error('The saved resume file is unavailable. Your other onboarding details are still saved.')
+      if (onProgress) onProgress('Uploading resume...')
+      const fd = new FormData()
+      fd.append('file', file)
+      await resumeApi.upload(fd)
+      checkpoint('resumeUploaded')
     }
 
     clearOnboardingState()
     return { success: true }
   } catch (err) {
-    return { success: false, error: err.message }
+    logger.warn('Hydration', 'Onboarding sync failed; keeping local data for retry', { error: err.message })
+    return { success: false, error: err.message || 'Could not finish saving your onboarding details.' }
   }
+}
+
+export const hydrateProfileFromOnboarding = (onProgress) => {
+  if (!hydrationPromise) {
+    hydrationPromise = performOnboardingHydration(onProgress).finally(() => {
+      hydrationPromise = null
+    })
+  }
+  return hydrationPromise
 }
 
 export const profileApi = {

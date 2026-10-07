@@ -26,7 +26,6 @@ import AIAssistant   from './pages/AIAssistant'
 import PortfolioPage from './pages/PortfolioPage'
 import DebugPage     from './pages/DebugPage'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://career-sync-backend-71c1.onrender.com'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -98,17 +97,6 @@ function AppRoutes() {
 export default function App() {
   useEffect(() => {
     initKeepAlive()
-  }, [])
-  // Pre-warm / ping Render backend on app open so user avoids cold-start latency
-  useEffect(() => {
-    const pingBackend = async () => {
-      try {
-        await fetch(`${API_BASE_URL}/api/health`, { method: 'GET', mode: 'no-cors' })
-      } catch {
-        // Silent catch: pre-warm only
-      }
-    }
-    pingBackend()
   }, [])
 
   return (
