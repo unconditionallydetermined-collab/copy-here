@@ -50,6 +50,26 @@ const DRIFT_CONFIG = {
   skills:   { T1: 10.5, phi1: 1.7, T2: 9.1,  phi2: 3.9 },
 }
 
+function AnimatedChars({ text, baseDelay = 0, speed = 18 }) {
+  return (
+    <>
+      {text.split('').map((char, i) => (
+        <span
+          key={i}
+          className="inline-block animate-char-reveal will-change-transform opacity-0"
+          style={{
+            animationDelay: `${baseDelay + i * speed}ms`,
+            animationFillMode: 'forwards',
+            whiteSpace: char === ' ' ? 'pre' : 'normal',
+          }}
+        >
+          {char}
+        </span>
+      ))}
+    </>
+  )
+}
+
 export default function LandingPage() {
   const [activeStageId, setActiveStageId] = useState('github')
   const [exitingStageId, setExitingStageId] = useState(null)
@@ -852,21 +872,29 @@ export default function LandingPage() {
           {activeConfig && textPhase !== 'hidden' ? (
             <div
               className={`flex flex-col items-center will-change-transform ${
-                textPhase === 'exiting'
-                  ? 'animate-text-fade-out'
-                  : textPhase === 'entering'
-                  ? 'animate-text-fade-in'
-                  : ''
+                textPhase === 'exiting' ? 'animate-text-fade-out' : ''
               }`}
             >
               <span className="text-xs uppercase font-bold tracking-wider text-slate-400">
-                {activeConfig.label}
+                {textPhase === 'entering' ? (
+                  <AnimatedChars text={activeConfig.label} baseDelay={0} speed={25} />
+                ) : (
+                  activeConfig.label
+                )}
               </span>
               <p className="text-[clamp(14px,2.2vmin,18px)] font-medium text-slate-300 mt-0.5">
                 <span className="font-bold text-white tabular-nums inline-block min-w-[2.5ch] text-right">
                   {displayCount}%
                 </span>{' '}
-                of companies hire through {activeConfig.label.toLowerCase()}
+                {textPhase === 'entering' ? (
+                  <AnimatedChars
+                    text={`of companies hire through ${activeConfig.label.toLowerCase()}`}
+                    baseDelay={80}
+                    speed={16}
+                  />
+                ) : (
+                  `of companies hire through ${activeConfig.label.toLowerCase()}`
+                )}
               </p>
             </div>
           ) : (
@@ -879,7 +907,7 @@ export default function LandingPage() {
           ref={buttonRef}
           to="/auth"
           className={`relative overflow-hidden mt-6 inline-flex items-center justify-center min-w-[170px] min-h-[48px] px-8 py-3 rounded-xl bg-white text-slate-950 font-semibold text-base cta-button-glow ring-1 ring-white/45 active:scale-[0.97] transition-[transform,background-color,box-shadow,border-color] duration-300 ease-out hover:bg-slate-100 hover:ring-white/70 hover:scale-[1.02] touch-manipulation select-none border border-white/35 ${
-            ctaPulse ? 'animate-cta-pulse ring-sky-400/60' : ''
+            ctaPulse ? 'animate-cta-pulse ring-2 ring-sky-400 shadow-[0_0_40px_rgba(56,189,248,0.55)]' : ''
           }`}
         >
           {/* Subtle light sweep */}
