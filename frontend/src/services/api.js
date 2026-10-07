@@ -3,9 +3,16 @@ import { supabase } from './supabase'
 import logger from './logger'
 import { getOnboardingState, saveOnboardingState, getResumeFile, clearOnboardingState } from './onboardingStorage'
 
+const PRODUCTION_API_URL = 'https://career-sync-backend-71c1.onrender.com/api/v1'
+
 const getBaseUrl = () => {
+  // Keep the deployed client on the verified Render backend. A stale
+  // VITE_API_BASE_URL from the static-site settings can otherwise silently
+  // point the app at an old, unreachable Render service.
+  if (import.meta.env.PROD) return PRODUCTION_API_URL
+
   const envUrl = import.meta.env.VITE_API_BASE_URL
-  if (!envUrl) return import.meta.env.PROD ? 'https://career-sync-backend-71c1.onrender.com/api/v1' : '/api/v1'
+  if (!envUrl) return '/api/v1'
   const trimmed = envUrl.replace(/\/+$/, '')
   return trimmed.endsWith('/api/v1') ? trimmed : `${trimmed}/api/v1`
 }
@@ -80,7 +87,7 @@ export const setOnboardingActive = (active) => {
   scheduleNextPing(100)
 }
 
-const RAW_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'https://career-sync-backend-71c1.onrender.com').replace(/\/+$/, '')
+const RAW_BASE_URL = getBaseUrl().replace(/\/+$/, '')
 const HEALTH_URL = RAW_BASE_URL.replace(/\/api\/v1$/, '') + '/actuator/health'
 
 let pingTimeoutId = null
