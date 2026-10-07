@@ -44,8 +44,8 @@ const BADGES = ['github', 'leetcode', 'linkedin', 'skills']
 export default function LandingPage() {
   const [activeStageId, setActiveStageId] = useState('github')
   const [exitingStageId, setExitingStageId] = useState(null)
-  const [stagePhase, setStagePhase] = useState('idle') // 'idle' | 'striking'
   const [poweringId, setPoweringId] = useState(null)
+  const [strikingId, setStrikingId] = useState(null)
   const [textPhase, setTextPhase] = useState('idle') // 'idle' | 'exiting' | 'entering'
   const [buttonShimmer, setButtonShimmer] = useState(false)
   const [displayCount, setDisplayCount] = useState(PLATFORM_CONFIG.github.targetPercent)
@@ -61,6 +61,7 @@ export default function LandingPage() {
   const incomingCandidateRef = useRef('leetcode')
   const pausedAtApexRef = useRef(null)
   const glowDimRef = useRef(1.0)
+  const strikeProgressRef = useRef(null) // null or { id, startY, currentY, startTime }
 
   const anglesRef = useRef({
     github: 0,
@@ -99,7 +100,7 @@ export default function LandingPage() {
     return () => window.removeEventListener('resize', calcRadius)
   }, [])
 
-  // 60fps orbit loop with bold glow and elastic collision avoidance
+  // 60fps orbit loop with apex detection and direct asteroid plunge translation
   useEffect(() => {
     if (reducedMotion) return
     let lastTime = performance.now()
@@ -114,8 +115,8 @@ export default function LandingPage() {
         const activeOrbiters = BADGES.filter((id) => orbitingRef.current[id])
         const candidate = incomingCandidateRef.current
 
-        // Check if candidate naturally completed circular motion to apex (top = 0 deg)
-        if (candidate && orbitingRef.current[candidate] && !pausedAtApexRef.current) {
+        // Check if candidate naturally reached apex (0 deg) in circular motion
+        if (candidate && orbitingRef.current[candidate] && !pausedAtApexRef.current && !strikeProgressRef.current) {
           const currentDeg = angles[candidate] % 360
           if (currentDeg >= 354 || currentDeg <= 6) {
             angles[candidate] = 0
@@ -149,13 +150,31 @@ export default function LandingPage() {
           angles[id] = (angles[id] + baseSpeed * speedFactor * delta) % 360
         })
 
-        // Position active orbit elements in DOM
+        // Position orbit elements in DOM
         const centerX = window.innerWidth / 2
         const centerY = window.innerHeight / 2
         const lights = []
 
         BADGES.forEach((id) => {
           const el = badgeDomRefs.current[id]
+
+          // Check if this badge is currently plunging down as an asteroid
+          if (strikeProgressRef.current && strikeProgressRef.current.id === id) {
+            const sp = strikeProgressRef.current
+            const elapsed = now - sp.startTime
+            const duration = 360 // 360ms plunge
+            const p = Math.min(1, elapsed / duration)
+            // Heavy acceleration plunge curve
+            const easeP = p * p * p
+            const curY = -badgeRadius + easeP * badgeRadius
+
+            if (el) {
+              el.style.transform = `translate3d(0px, ${curY}px, 0)`
+              el.style.opacity = '1'
+            }
+            return
+          }
+
           if (orbitingRef.current[id]) {
             const deg = angles[id]
             const rad = ((deg - 90) * Math.PI) / 180
@@ -217,44 +236,53 @@ export default function LandingPage() {
     }
   }, [reducedMotion])
 
-  // Choreography: apex pause -> powerup -> s-curve text exit -> asteroid strike -> slam & text in -> button shimmer
+  // Powerup at apex -> S-curve text exit -> Direct asteroid plunge -> Impact replace
   useEffect(() => {
     if (!poweringId) return
 
-    // 1. As powerup loads, s-curve/dim away glow under other orbs so focus snaps to top
+    // 1. As powerup loads, dim glow under other orbs so focus snaps to apex
     glowDimRef.current = 0.15
 
-    // 2. While asteroid is about to strike, get rid of text below by S-curving it out
+    // 2. While asteroid is about to strike, get rid of text below with S-curve exit
     const textExitTimer = setTimeout(() => {
       setTextPhase('exiting')
-    }, 380)
+    }, 400)
 
-    // 3. Powerup completes: launch asteroid straight down into center
-    const strikeTimer = setTimeout(() => {
-      const strikingId = poweringId
+    // 3. Launch asteroid directly straight down from apex
+    const launchTimer = setTimeout(() => {
+      const launchingId = poweringId
       setPoweringId(null)
       pausedAtApexRef.current = null
-      orbitingRef.current[strikingId] = false
+      setStrikingId(launchingId)
 
-      const prevActive = activeStageIdRef.current
-      setExitingStageId(prevActive)
-      activeStageIdRef.current = strikingId
-      setActiveStageId(strikingId)
-      setStagePhase('striking')
+      strikeProgressRef.current = {
+        id: launchingId,
+        startY: -badgeRadius,
+        startTime: performance.now(),
+      }
 
-      // Return previous icon back to orbit queue
+      // 4. Exact moment of impact (360ms later)
       setTimeout(() => {
-        orbitingRef.current[prevActive] = true
-        anglesRef.current[prevActive] = 230
-        setExitingStageId(null)
-      }, 420)
+        strikeProgressRef.current = null
+        orbitingRef.current[launchingId] = false
+        setStrikingId(null)
 
-      // Asteroid impact at center: slam physical water grid & new text slams in
-      setTimeout(() => {
-        setStagePhase('idle')
+        const prevActive = activeStageIdRef.current
+        setExitingStageId(prevActive)
+        activeStageIdRef.current = launchingId
+        setActiveStageId(launchingId) // Only now replaces center icon!
+
         setTextPhase('entering')
-        glowDimRef.current = 1.0 // Glow returns to orbit
+        glowDimRef.current = 1.0
 
+        // Return previous icon back into orbit queue
+        setTimeout(() => {
+          orbitingRef.current[prevActive] = true
+          anglesRef.current[prevActive] = 230
+          setExitingStageId(null)
+        }, 400)
+
+        // Impact slam on water ripple canvas
         if (centerSlotRef.current && rippleRef.current) {
           const rect = centerSlotRef.current.getBoundingClientRect()
           const cx = rect.left + rect.width / 2
@@ -269,15 +297,15 @@ export default function LandingPage() {
           }
 
           rippleRef.current.triggerSlam(cx, cy, {
-            intensity: 360,
-            blastRadius: 135,
+            intensity: 380,
+            blastRadius: 140,
             targetX: btnX,
             targetY: btnY,
           })
         }
 
         // Percentage counter roll-up
-        const target = PLATFORM_CONFIG[strikingId].targetPercent
+        const target = PLATFORM_CONFIG[launchingId].targetPercent
         let current = 0
         setDisplayCount(0)
         clearInterval(countIntervalRef.current)
@@ -291,24 +319,24 @@ export default function LandingPage() {
             setDisplayCount(current)
           }
         }, stepTime)
-      }, 400)
-    }, 780)
+      }, 360)
+    }, 850)
 
     return () => {
       clearTimeout(textExitTimer)
-      clearTimeout(strikeTimer)
+      clearTimeout(launchTimer)
     }
-  }, [poweringId])
+  }, [poweringId, badgeRadius])
 
   const handleSplash = () => {
-    // Wait as returning glow dots stream to button, then subtle CTA animation triggers
+    // Wait as visible surge wave & glowing dots converge into CTA button (~2.2s)
     setTimeout(() => {
       setButtonShimmer(true)
       setTimeout(() => {
         setButtonShimmer(false)
         setTextPhase('idle')
       }, 950)
-    }, 2400)
+    }, 2200)
   }
 
   const activeConfig = activeStageId ? PLATFORM_CONFIG[activeStageId] : null
@@ -324,13 +352,14 @@ export default function LandingPage() {
     >
       <WaterRippleCanvas ref={rippleRef} onSlam={handleSplash} className="z-0" />
 
-      {/* Orbit Track with bold glow and elastic spacing */}
+      {/* Orbit Track with direct non-jerky transforms */}
       <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
         {!reducedMotion &&
           BADGES.map((id) => {
             const cfg = PLATFORM_CONFIG[id]
             const Icon = cfg.icon
             const isPowering = poweringId === id
+            const isStriking = strikingId === id
 
             return (
               <div
@@ -339,9 +368,9 @@ export default function LandingPage() {
                   badgeDomRefs.current[id] = el
                 }}
                 aria-label={cfg.name}
-                className={`absolute w-12 h-12 rounded-full bg-slate-900/85 backdrop-blur-md shadow-xl border border-white/10 flex items-center justify-center will-change-transform transition-all duration-300 ${
+                className={`absolute w-12 h-12 rounded-full bg-slate-900/85 backdrop-blur-md shadow-xl border border-white/10 flex items-center justify-center will-change-transform ${
                   isPowering ? 'animate-powerup ring-2 ring-white scale-110' : ''
-                }`}
+                } ${isStriking ? 'ring-2 ring-sky-400 drop-shadow-[0_-12px_18px_rgba(56,189,248,0.8)]' : ''}`}
               >
                 <Icon size={22} color={cfg.color} />
               </div>
@@ -366,9 +395,7 @@ export default function LandingPage() {
 
           {activeConfig ? (
             <div
-              className={`w-14 h-14 rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/20 flex items-center justify-center ${
-                stagePhase === 'striking' ? 'animate-asteroid-strike' : ''
-              }`}
+              className="w-14 h-14 rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/20 flex items-center justify-center"
             >
               {React.createElement(activeConfig.icon, { size: 26, color: activeConfig.color })}
             </div>

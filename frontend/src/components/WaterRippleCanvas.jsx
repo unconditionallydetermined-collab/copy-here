@@ -8,9 +8,10 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
   const animRef = useRef(null)
   const dotsRef = useRef([])
   const wavesRef = useRef([])
+  const surgeWavesRef = useRef([])
   const hoverLightsRef = useRef([])
   const streamParticlesRef = useRef([])
-  const glowDimRef = useRef(1.0) // 1.0 = full bold glow, decays when powerup loads
+  const glowDimRef = useRef(1.0)
 
   useImperativeHandle(ref, () => ({
     triggerSlam: (clientX, clientY, options = {}) => {
@@ -29,23 +30,37 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
     const x = clientX !== undefined ? clientX - rect.left : rect.width / 2
     const y = clientY !== undefined ? clientY - rect.top : rect.height / 2
 
-    const intensity = options.intensity || 360
-    const blastRadius = options.blastRadius || 135
+    const intensity = options.intensity || 380
+    const blastRadius = options.blastRadius || 140
+    const targetX = options.targetX ?? (rect.width / 2)
+    const targetY = options.targetY ?? (rect.height * 0.72)
 
-    // Concentric propagating wave
+    // 1. Concentric physical ripple waves with visible refractive rings
     wavesRef.current.push({
       x,
       y,
       radius: 0,
-      speed: 540,
+      speed: 480,
       maxRadius: Math.max(rect.width, rect.height) * 0.95,
       intensity,
-      width: 64,
+      width: 70,
       life: 1.0,
-      decay: 0.6,
+      decay: 0.55,
     })
 
-    // Strong physical grid splash displacement
+    // 2. Visible directed water surge wave traveling straight down to CTA button
+    surgeWavesRef.current.push({
+      startX: x,
+      startY: y,
+      targetX,
+      targetY,
+      progress: 0,
+      speed: 0.55, // reaches CTA in ~1.8s
+      width: 120,
+      alpha: 1.0,
+    })
+
+    // 3. Grid splash displacement
     const dots = dotsRef.current
     for (let i = 0; i < dots.length; i++) {
       const dot = dots[i]
@@ -56,38 +71,35 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
       if (distSq < blastRadius * blastRadius && distSq > 0.001) {
         const dist = Math.sqrt(distSq)
         const falloff = 1 - dist / blastRadius
-        const blastForce = falloff * 310
+        const blastForce = falloff * 320
         dot.vx += (dx / dist) * blastForce
         dot.vy += (dy / dist) * blastForce
       }
     }
 
-    // Returning dots stream and converge toward CTA button
-    const targetX = options.targetX ?? (rect.width / 2)
-    const targetY = options.targetY ?? (rect.height * 0.72)
-
+    // 4. Returning glowing dots ride along the wave crest toward CTA
     setTimeout(() => {
       const particles = []
-      const count = 42
+      const count = 48
       for (let i = 0; i < count; i++) {
         const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.4
-        const dist = 75 + Math.random() * 120
+        const dist = 60 + Math.random() * 110
         particles.push({
           x: x + Math.cos(angle) * dist,
           y: y + Math.sin(angle) * dist,
-          vx: Math.cos(angle) * (24 + Math.random() * 45),
-          vy: Math.sin(angle) * (24 + Math.random() * 45),
+          vx: Math.cos(angle) * 20,
+          vy: Math.sin(angle) * 20,
           targetX,
           targetY,
           progress: 0,
-          speed: 0.48 + Math.random() * 0.32,
-          alpha: 0.95,
-          size: 2.2 + Math.random() * 2.2,
-          hue: 205 + Math.random() * 25,
+          speed: 0.52 + Math.random() * 0.28,
+          alpha: 1.0,
+          size: 2.2 + Math.random() * 2.4,
+          hue: 200 + Math.random() * 25,
         })
       }
       streamParticlesRef.current.push(...particles)
-    }, 650)
+    }, 450)
 
     if (typeof onSlam === 'function') {
       onSlam({ x, y })
@@ -156,16 +168,17 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
 
       const dots = dotsRef.current
       const waves = wavesRef.current
+      const surgeWaves = surgeWavesRef.current
       const lights = hoverLightsRef.current
       const particles = streamParticlesRef.current
       const dimFactor = glowDimRef.current
 
-      // 1. Advance waves
+      // 1. Advance waves & calculate dot impulse
       for (let i = waves.length - 1; i >= 0; i--) {
         const w = waves[i]
         w.radius += w.speed * dt
         w.life -= dt * w.decay
-        w.intensity *= Math.exp(-1.4 * dt)
+        w.intensity *= Math.exp(-1.3 * dt)
 
         const waveFrontWidth = w.width
         const rMin = Math.max(0, w.radius - waveFrontWidth)
@@ -216,7 +229,62 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
       ctx.fillStyle = '#0a0a0a'
       ctx.fillRect(0, 0, width, height)
 
-      // 4. Render dots with bold, unsubtle orbit glow
+      // 4. Render visible concentric water wave rings
+      ctx.save()
+      for (let i = 0; i < waves.length; i++) {
+        const w = waves[i]
+        const ringAlpha = Math.max(0, (w.intensity / 380) * (1 - w.radius / w.maxRadius))
+        if (ringAlpha > 0.02) {
+          // Double refractive water ring
+          ctx.strokeStyle = `rgba(56, 189, 248, ${(ringAlpha * 0.45).toFixed(3)})`
+          ctx.lineWidth = 3.5
+          ctx.beginPath()
+          ctx.arc(w.x, w.y, w.radius, 0, Math.PI * 2)
+          ctx.stroke()
+
+          ctx.strokeStyle = `rgba(255, 255, 255, ${(ringAlpha * 0.75).toFixed(3)})`
+          ctx.lineWidth = 1.5
+          ctx.beginPath()
+          ctx.arc(w.x, w.y, Math.max(0, w.radius - 8), 0, Math.PI * 2)
+          ctx.stroke()
+        }
+      }
+
+      // 5. Render visible water surge wave traveling down to CTA
+      for (let i = surgeWaves.length - 1; i >= 0; i--) {
+        const s = surgeWaves[i]
+        s.progress += dt * s.speed
+
+        if (s.progress >= 1.0) {
+          surgeWaves.splice(i, 1)
+          continue
+        }
+
+        const currX = s.startX + (s.targetX - s.startX) * s.progress
+        const currY = s.startY + (s.targetY - s.startY) * s.progress
+        const waveArcRadius = 35 + s.progress * 45
+        const waveAlpha = Math.sin(s.progress * Math.PI) * 0.65
+
+        // Glowing water surge crescent
+        const grad = ctx.createRadialGradient(currX, currY, 0, currX, currY, waveArcRadius)
+        grad.addColorStop(0, `rgba(56, 189, 248, ${(waveAlpha * 0.35).toFixed(3)})`)
+        grad.addColorStop(0.7, `rgba(56, 189, 248, ${(waveAlpha * 0.65).toFixed(3)})`)
+        grad.addColorStop(1, 'rgba(56, 189, 248, 0)')
+
+        ctx.strokeStyle = `rgba(186, 230, 253, ${waveAlpha.toFixed(3)})`
+        ctx.lineWidth = 2.5
+        ctx.beginPath()
+        ctx.arc(currX, currY, waveArcRadius, 0.2 * Math.PI, 0.8 * Math.PI)
+        ctx.stroke()
+
+        ctx.fillStyle = grad
+        ctx.beginPath()
+        ctx.arc(currX, currY, waveArcRadius, 0, Math.PI * 2)
+        ctx.fill()
+      }
+      ctx.restore()
+
+      // 6. Render dots with bold orbit glow
       const LIGHT_RADIUS = 52
       const LIGHT_RADIUS_SQ = LIGHT_RADIUS * LIGHT_RADIUS
 
@@ -228,7 +296,6 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
 
         let energy = Math.min(1, disp / 6)
 
-        // Bold illumination under moving icons (scaled by dimFactor)
         if (dimFactor > 0.01) {
           for (let l = 0; l < lights.length; l++) {
             const lx = lights[l].x - dot.ox
@@ -253,7 +320,7 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
         ctx.fill()
       }
 
-      // 5. Converging Stream dots toward CTA button
+      // 7. Converging stream dots riding wave into CTA button
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i]
         p.progress += dt * p.speed
