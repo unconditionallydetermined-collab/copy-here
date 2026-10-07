@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { githubApi, profileApi } from '../services/api'
 import { Star, GitFork, RefreshCw, Loader2, ExternalLink, Users, BookOpen } from 'lucide-react'
 import { Github } from '../components/Icons'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 export default function GitHubPage() {
   const [data, setData] = useState(null)

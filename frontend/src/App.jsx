@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { Toaster } from 'react-hot-toast'
+import { Toaster } from 'sonner'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import AppLayout from './components/AppLayout'
 
@@ -74,9 +74,16 @@ export default function App() {
         <AppRoutes />
         <Toaster
           position="top-right"
+          richColors
+          closeButton
+          theme="system"
           toastOptions={{
             duration: 3500,
-            style: { fontFamily: 'Inter, system-ui, sans-serif', fontSize: '14px', borderRadius: '10px' }
+            style: {
+              borderRadius: '12px',
+              backdropFilter: 'blur(16px)',
+              border: '1px solid rgba(226, 232, 240, 0.8)',
+            }
           }}
         />
       </BrowserRouter>

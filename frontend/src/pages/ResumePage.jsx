@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { resumeApi, aiApi, skillsApi } from '../services/api'
 import { Upload, FileText, CheckCircle2, Loader2, Zap, Brain, RefreshCw, ExternalLink, PlusCircle } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 function MarkdownText({ text }) {
   if (!text) return null

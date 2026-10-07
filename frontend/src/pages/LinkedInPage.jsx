@@ -5,7 +5,7 @@ import {
   Users, MapPin, Briefcase, GraduationCap, Award, CheckCircle2, X
 } from 'lucide-react'
 import { Linkedin } from '../components/Icons'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 function MarkdownText({ text }) {
   if (!text) return null

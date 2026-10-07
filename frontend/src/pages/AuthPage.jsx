@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { TrendingUp, Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 export default function AuthPage() {
   const [searchParams] = useSearchParams()

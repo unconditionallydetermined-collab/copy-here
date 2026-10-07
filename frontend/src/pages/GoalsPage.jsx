@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { goalsApi } from '../services/api'
 import { Plus, Target, Pencil, Trash2, X, Loader2, CheckCircle2 } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 const CATEGORIES = ['DSA', 'Java', 'Web Development', 'Projects', 'Internship', 'Placement', 'Certification', 'Other']
 const CATEGORY_COLOR = {

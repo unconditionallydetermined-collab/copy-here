@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { Github, Linkedin, Lightbulb, Code2 } from 'lucide-react'
+import { Lightbulb, Code2 } from 'lucide-react'
+import { Github, Linkedin } from '../components/Icons'
 
 // TODO: Replace placeholder percentages with verified sourced figures
 const PLATFORM_CONFIG = {

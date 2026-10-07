@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { skillsApi, resumeApi } from '../services/api'
 import { Plus, Pencil, Trash2, Zap, X, Loader2, FileText } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 const CATEGORIES = ['Frontend', 'Backend', 'Database', 'DevOps', 'Programming Language', 'Mobile', 'AI/ML', 'DSA', 'Tools', 'Other']
 

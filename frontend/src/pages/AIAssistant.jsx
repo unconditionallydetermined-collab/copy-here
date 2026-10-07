@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { aiApi } from '../services/api'
 import { Bot, Send, Loader2, User, Sparkles } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 const SUGGESTED = [
   'Am I ready for an SDE internship?',

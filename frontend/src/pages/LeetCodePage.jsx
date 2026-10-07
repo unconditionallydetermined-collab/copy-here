@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { leetcodeApi, profileApi } from '../services/api'
 import { Code2, RefreshCw, Loader2, Trophy } from 'lucide-react'
 import { RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer } from 'recharts'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 export default function LeetCodePage() {
   const [data, setData] = useState(null)

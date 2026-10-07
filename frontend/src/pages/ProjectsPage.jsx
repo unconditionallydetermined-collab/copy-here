@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { projectsApi } from '../services/api'
 import { Plus, FolderOpen, ExternalLink, Pencil, Trash2, X, Loader2 } from 'lucide-react'
 import { Github } from '../components/Icons'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 function ProjectModal({ project, onClose, onSave }) {
   const [form, setForm] = useState(project || { name: '', description: '', technologies: '', githubUrl: '', liveUrl: '', role: '' })

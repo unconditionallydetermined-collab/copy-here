@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { jobsApi } from '../services/api'
 import { Plus, Briefcase, ExternalLink, Pencil, Trash2, X, Loader2, ChevronRight } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 const STATUSES = ['Saved', 'Applied', 'Shortlisted', 'Interview', 'Selected', 'Rejected']
 const STATUS_STYLE = {

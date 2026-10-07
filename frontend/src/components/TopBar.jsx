@@ -21,7 +21,7 @@ export default function TopBar({ onMenuClick }) {
   const page = pageTitles[pathname] || { title: 'Career Sync', subtitle: '' }
 
   return (
-    <header className="bg-white border-b border-slate-100 px-6 py-3.5 flex items-center justify-between sticky top-0 z-10">
+    <header className="apple-glass border-b border-slate-200/50 px-6 py-3.5 flex items-center justify-between sticky top-0 z-10 safe-top">
       <div className="flex items-center gap-4">
         <button
           onClick={onMenuClick}

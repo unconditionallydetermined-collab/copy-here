@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { profileApi } from '../services/api'
 import { User, GraduationCap, Target, Code2, Phone, MapPin, Loader2 } from 'lucide-react'
 import { Linkedin, Github } from '../components/Icons'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 import { useAuth } from '../context/AuthContext'
 
 export default function ProfilePage() {

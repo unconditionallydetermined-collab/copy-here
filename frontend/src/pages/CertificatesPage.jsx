@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { certificatesApi } from '../services/api'
 import { Plus, Award, ExternalLink, Pencil, Trash2, X, Loader2 } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 function CertModal({ cert, onClose, onSave }) {
   const [form, setForm] = useState(cert || { title: '', issuer: '', issueDate: '', credentialUrl: '', skills: '' })
