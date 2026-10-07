@@ -8,14 +8,14 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
   const animRef = useRef(null)
   const dotsRef = useRef([])
   const wavesRef = useRef([])
-  const wakesRef = useRef([])
+  const hoverLightsRef = useRef([])
 
   useImperativeHandle(ref, () => ({
     triggerSlam: (clientX, clientY, options = {}) => {
       triggerSlamInternal(clientX, clientY, options)
     },
-    addWake: (clientX, clientY, vx = 0, vy = 0, strength = 1) => {
-      addWakeInternal(clientX, clientY, vx, vy, strength)
+    setHoverLights: (lights = []) => {
+      hoverLightsRef.current = lights
     },
   }))
 
@@ -26,23 +26,21 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
     const x = clientX !== undefined ? clientX - rect.left : rect.width / 2
     const y = clientY !== undefined ? clientY - rect.top : rect.height / 2
 
-    // Toned-down splash intensity
-    const intensity = options.intensity || 180
-    const carveRadius = options.carveRadius || 32
+    const intensity = options.intensity || 190
+    const carveRadius = options.carveRadius || 34
 
     wavesRef.current.push({
       x,
       y,
-      radius: carveRadius * 0.6,
-      speed: 380,
+      radius: carveRadius * 0.5,
+      speed: 360,
       maxRadius: Math.max(rect.width, rect.height) * 0.85,
       intensity,
-      width: 52,
+      width: 50,
       life: 1.0,
-      decay: 0.7,
+      decay: 0.75,
     })
 
-    // Gentle displacement carving without aggressive shockwave
     const dots = dotsRef.current
     const blastRadius = carveRadius * 2.2
     for (let i = 0; i < dots.length; i++) {
@@ -61,27 +59,6 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
 
     if (typeof onSlam === 'function') {
       onSlam({ x, y })
-    }
-  }
-
-  const addWakeInternal = (clientX, clientY, vx = 0, vy = 0, strength = 1) => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const rect = canvas.getBoundingClientRect()
-    const x = clientX - rect.left
-    const y = clientY - rect.top
-
-    // Subdued, subtle wake ripple
-    if (wakesRef.current.length < 25) {
-      wakesRef.current.push({
-        x,
-        y,
-        radius: 3,
-        speed: 90,
-        intensity: 8 * strength,
-        life: 0.9,
-        decay: 1.6,
-      })
     }
   }
 
@@ -147,7 +124,7 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
 
       const dots = dotsRef.current
       const waves = wavesRef.current
-      const wakes = wakesRef.current
+      const lights = hoverLightsRef.current
 
       // 1. Advance waves
       for (let i = waves.length - 1; i >= 0; i--) {
@@ -185,40 +162,7 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
         }
       }
 
-      // 2. Advance subtle wakes
-      for (let i = wakes.length - 1; i >= 0; i--) {
-        const wk = wakes[i]
-        wk.radius += wk.speed * dt
-        wk.life -= dt * wk.decay
-        wk.intensity *= Math.exp(-2.6 * dt)
-
-        const rMin = Math.max(0, wk.radius - 18)
-        const rMax = wk.radius + 18
-        const rMinSq = rMin * rMin
-        const rMaxSq = rMax * rMax
-
-        for (let j = 0; j < dots.length; j++) {
-          const dot = dots[j]
-          const dx = dot.ox - wk.x
-          const dy = dot.oy - wk.y
-          const distSq = dx * dx + dy * dy
-
-          if (distSq >= rMinSq && distSq <= rMaxSq && distSq > 0.0001) {
-            const dist = Math.sqrt(distSq)
-            const diff = Math.abs(dist - wk.radius)
-            const falloff = 0.5 * (1 + Math.cos((Math.PI * diff) / 18))
-            const impulse = wk.intensity * falloff
-            dot.vx += (dx / dist) * impulse * dt * 8
-            dot.vy += (dy / dist) * impulse * dt * 8
-          }
-        }
-
-        if (wk.life <= 0 || wk.intensity < 0.1) {
-          wakes.splice(i, 1)
-        }
-      }
-
-      // 3. Fluid particle spring physics
+      // 2. Fluid spring physics
       for (let i = 0; i < dots.length; i++) {
         const dot = dots[i]
         const dispX = dot.x - dot.ox
@@ -234,9 +178,12 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
         dot.y += dot.vy * dt
       }
 
-      // 4. Render dots smoothly
+      // 3. Render dots with light-up under icons (no drag)
       ctx.fillStyle = '#0a0a0a'
       ctx.fillRect(0, 0, width, height)
+
+      const LIGHT_RADIUS = 36
+      const LIGHT_RADIUS_SQ = LIGHT_RADIUS * LIGHT_RADIUS
 
       for (let i = 0; i < dots.length; i++) {
         const dot = dots[i]
@@ -244,9 +191,22 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
         const dy = dot.y - dot.oy
         const disp = Math.sqrt(dx * dx + dy * dy)
 
-        const energy = Math.min(1, disp / 10)
-        const alpha = 0.35 + 0.55 * energy
-        const radius = BASE_DOT_RADIUS + 0.7 * energy
+        // Wave excitation
+        let energy = Math.min(1, disp / 10)
+
+        // Light-up effect from overhead icons (gentle glow instead of drag)
+        for (let l = 0; l < lights.length; l++) {
+          const lx = lights[l].x - dot.ox
+          const ly = lights[l].y - dot.oy
+          const lDistSq = lx * lx + ly * ly
+          if (lDistSq < LIGHT_RADIUS_SQ) {
+            const lFactor = 1 - Math.sqrt(lDistSq) / LIGHT_RADIUS
+            energy = Math.max(energy, lFactor * 0.95)
+          }
+        }
+
+        const alpha = 0.35 + 0.58 * energy
+        const radius = BASE_DOT_RADIUS + 0.8 * energy
 
         ctx.fillStyle = energy > 0.08
           ? `rgba(${Math.round(200 + 55 * energy)}, ${Math.round(210 + 45 * energy)}, 255, ${alpha.toFixed(3)})`

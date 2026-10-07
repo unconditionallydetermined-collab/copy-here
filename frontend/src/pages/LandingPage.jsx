@@ -45,7 +45,7 @@ const DEBUG_SLOWMO = 1
 export default function LandingPage() {
   const [activeStageId, setActiveStageId] = useState('github')
   const [exitingStageId, setExitingStageId] = useState(null)
-  const [isSlamming, setIsSlamming] = useState(false)
+  const [stagePhase, setStagePhase] = useState('idle') // 'idle' | 'descending'
   const [buttonShimmer, setButtonShimmer] = useState(false)
   const [displayCount, setDisplayCount] = useState(PLATFORM_CONFIG.github.targetPercent)
   const [reducedMotion, setReducedMotion] = useState(false)
@@ -53,8 +53,11 @@ export default function LandingPage() {
 
   const rippleRef = useRef(null)
   const centerSlotRef = useRef(null)
+  const badgeDomRefs = useRef({})
 
   const activeStageIdRef = useRef('github')
+  const pausedBadgeRef = useRef(null) // badge hovering at top
+
   const anglesRef = useRef({
     github: 0,
     leetcode: 90,
@@ -62,25 +65,15 @@ export default function LandingPage() {
     skills: 270,
   })
 
-  const [angles, setAngles] = useState(anglesRef.current)
-  const [orbiting, setOrbiting] = useState({
+  const orbitingRef = useRef({
     github: false,
     leetcode: true,
     linkedin: true,
     skills: true,
   })
-  const orbitingRef = useRef(orbiting)
-  orbitingRef.current = orbiting
 
-    const handleSplash = () => {
-    setTimeout(() => {
-      setButtonShimmer(true)
-      setTimeout(() => setButtonShimmer(false), 900)
-    }, 3000)
-  }
-const animationFrameRef = useRef(null)
+  const animationFrameRef = useRef(null)
   const countIntervalRef = useRef(null)
-  const wakeThrottleRef = useRef(0)
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -90,12 +83,10 @@ const animationFrameRef = useRef(null)
     return () => mq.removeEventListener('change', handler)
   }, [])
 
-  // Keep orbit wide enough to never overlap text/buttons
   useEffect(() => {
     const calcRadius = () => {
       const vw = window.innerWidth
       const vh = window.innerHeight
-      // Minimum 200px radius to cleanly clear center card
       const r = Math.max(200, Math.min(vw * 0.44, vh * 0.40, 290))
       setBadgeRadius(r)
     }
@@ -104,7 +95,7 @@ const animationFrameRef = useRef(null)
     return () => window.removeEventListener('resize', calcRadius)
   }, [])
 
-  // Orbit animation loop with gentle wake emission
+  // Smooth 60fps orbit without React re-render churn
   useEffect(() => {
     if (reducedMotion) return
     let lastTime = performance.now()
@@ -115,30 +106,43 @@ const animationFrameRef = useRef(null)
       lastTime = now
 
       if (document.visibilityState === 'visible') {
-        const next = { ...anglesRef.current }
+        const next = anglesRef.current
         const centerX = window.innerWidth / 2
         const centerY = window.innerHeight / 2
-
-        wakeThrottleRef.current += 1
-        const emitWake = wakeThrottleRef.current % 8 === 0
+        const lights = []
 
         BADGES.forEach((id) => {
+          const el = badgeDomRefs.current[id]
           if (orbitingRef.current[id]) {
-            next[id] = (next[id] + speed * delta) % 360
-            if (emitWake && rippleRef.current) {
-              const deg = next[id]
-              const rad = ((deg - 90) * Math.PI) / 180
-              const bx = centerX + Math.cos(rad) * badgeRadius
-              const by = centerY + Math.sin(rad) * badgeRadius
-              const vx = -Math.sin(rad) * 0.8
-              const vy = Math.cos(rad) * 0.8
-              rippleRef.current.addWake(bx, by, vx, vy, 0.3)
+            if (pausedBadgeRef.current === id) {
+              next[id] = 0 // Held vertically above at the apex
+            } else {
+              next[id] = (next[id] + speed * delta) % 360
             }
+
+            const deg = next[id]
+            const rad = ((deg - 90) * Math.PI) / 180
+            const x = Math.cos(rad) * badgeRadius
+            const y = Math.sin(rad) * badgeRadius
+
+            if (el) {
+              el.style.transform = `translate3d(${x}px, ${y}px, 0)`
+              el.style.opacity = '1'
+            }
+
+            lights.push({
+              x: centerX + x,
+              y: centerY + y,
+            })
+          } else if (el) {
+            el.style.opacity = '0'
           }
         })
 
-        anglesRef.current = next
-        setAngles({ ...next })
+        // Illuminate water dots beneath active icons without dragging physics
+        if (rippleRef.current) {
+          rippleRef.current.setHoverLights(lights)
+        }
       }
       animationFrameRef.current = requestAnimationFrame(tick)
     }
@@ -147,7 +151,7 @@ const animationFrameRef = useRef(null)
     return () => cancelAnimationFrame(animationFrameRef.current)
   }, [reducedMotion, badgeRadius])
 
-  // Continuous cycling scheduler that won't get cancelled
+  // Choreography: arrival at apex, 1s hover, S-curve descent & exit
   useEffect(() => {
     if (reducedMotion) {
       setActiveStageId('skills')
@@ -164,54 +168,61 @@ const animationFrameRef = useRef(null)
       const currentIndex = BADGES.indexOf(currentActive)
       const nextId = BADGES[(currentIndex + 1) % BADGES.length]
 
-      // Exit current
-      setExitingStageId(currentActive)
+      // Step 1: Next icon moves to top (vertically above) and pauses for 1 second
+      pausedBadgeRef.current = nextId
+      anglesRef.current[nextId] = 0
+
       setTimeout(() => {
         if (isDestroyed) return
-        setOrbiting((prev) => ({ ...prev, [currentActive]: true }))
-        anglesRef.current[currentActive] = 230
-        setExitingStageId(null)
-      }, 220 * DEBUG_SLOWMO)
 
-      // Enter next
-      setOrbiting((prev) => ({ ...prev, [nextId]: false }))
-      activeStageIdRef.current = nextId
-      setActiveStageId(nextId)
-      setIsSlamming(true)
+        // Step 2: Begin S-curve replacement
+        pausedBadgeRef.current = null
+        orbitingRef.current[nextId] = false
 
-      // Impact slam trigger
-      setTimeout(() => {
-        if (isDestroyed) return
-        if (centerSlotRef.current && rippleRef.current) {
-          const rect = centerSlotRef.current.getBoundingClientRect()
-          const cx = rect.left + rect.width / 2
-          const cy = rect.top + rect.height / 2
-          rippleRef.current.triggerSlam(cx, cy, { intensity: 200, carveRadius: 32 })
-        }
-      }, 310 * DEBUG_SLOWMO)
+        setExitingStageId(currentActive)
+        activeStageIdRef.current = nextId
+        setActiveStageId(nextId)
+        setStagePhase('descending')
 
-      setTimeout(() => {
-        if (!isDestroyed) setIsSlamming(false)
-      }, 500 * DEBUG_SLOWMO)
+        // Exit current icon back to orbit
+        setTimeout(() => {
+          if (isDestroyed) return
+          orbitingRef.current[currentActive] = true
+          anglesRef.current[currentActive] = 230
+          setExitingStageId(null)
+        }, 600 * DEBUG_SLOWMO)
 
-      // Counter animation
-      const target = PLATFORM_CONFIG[nextId].targetPercent
-      let current = 0
-      setDisplayCount(0)
-      clearInterval(countIntervalRef.current)
-      const stepTime = (900 * DEBUG_SLOWMO) / target
-      countIntervalRef.current = setInterval(() => {
-        current += 2
-        if (current >= target) {
-          setDisplayCount(target)
-          clearInterval(countIntervalRef.current)
-        } else {
-          setDisplayCount(current)
-        }
-      }, stepTime)
+        // Impact slam when S-curve lands (~650ms)
+        setTimeout(() => {
+          if (isDestroyed) return
+          setStagePhase('idle')
+          if (centerSlotRef.current && rippleRef.current) {
+            const rect = centerSlotRef.current.getBoundingClientRect()
+            const cx = rect.left + rect.width / 2
+            const cy = rect.top + rect.height / 2
+            rippleRef.current.triggerSlam(cx, cy, { intensity: 190, carveRadius: 32 })
+          }
+        }, 650 * DEBUG_SLOWMO)
+
+        // Counter roll-up
+        const target = PLATFORM_CONFIG[nextId].targetPercent
+        let current = 0
+        setDisplayCount(0)
+        clearInterval(countIntervalRef.current)
+        const stepTime = (900 * DEBUG_SLOWMO) / target
+        countIntervalRef.current = setInterval(() => {
+          current += 2
+          if (current >= target) {
+            setDisplayCount(target)
+            clearInterval(countIntervalRef.current)
+          } else {
+            setDisplayCount(current)
+          }
+        }, stepTime)
+      }, 1000 * DEBUG_SLOWMO) // 1 second hover at apex
     }
 
-    const interval = setInterval(cycleToNext, 5200 * DEBUG_SLOWMO)
+    const interval = setInterval(cycleToNext, 6200 * DEBUG_SLOWMO)
 
     return () => {
       isDestroyed = true
@@ -219,6 +230,14 @@ const animationFrameRef = useRef(null)
       clearInterval(countIntervalRef.current)
     }
   }, [reducedMotion])
+
+  const handleSplash = () => {
+    // 3 seconds after each splash: shimmer effect sweeps left to right
+    setTimeout(() => {
+      setButtonShimmer(true)
+      setTimeout(() => setButtonShimmer(false), 900)
+    }, 3000)
+  }
 
   const activeConfig = activeStageId ? PLATFORM_CONFIG[activeStageId] : null
   const exitingConfig = exitingStageId ? PLATFORM_CONFIG[exitingStageId] : null
@@ -233,31 +252,21 @@ const animationFrameRef = useRef(null)
     >
       <WaterRippleCanvas ref={rippleRef} onSlam={handleSplash} className="z-0" />
 
-      {/* Orbit Layer */}
-      <div
-        className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none"
-      >
+      {/* Orbit Layer with smooth non-jerky direct transforms */}
+      <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
         {!reducedMotion &&
           BADGES.map((id) => {
-            const isOrbiting = orbiting[id]
-            const deg = angles[id] || 0
-            const rad = ((deg - 90) * Math.PI) / 180
-            const x = Math.cos(rad) * badgeRadius
-            const y = Math.sin(rad) * badgeRadius
             const cfg = PLATFORM_CONFIG[id]
             const Icon = cfg.icon
-
-            if (!isOrbiting) return null
 
             return (
               <div
                 key={id}
+                ref={(el) => {
+                  badgeDomRefs.current[id] = el
+                }}
                 aria-label={cfg.name}
                 className="absolute w-12 h-12 rounded-full bg-slate-900/80 backdrop-blur-md shadow-xl border border-white/10 flex items-center justify-center will-change-transform"
-                style={{
-                  transform: `translate3d(${x}px, ${y}px, 0)`,
-                  transitionDuration: `${120 * DEBUG_SLOWMO}ms`,
-                }}
               >
                 <Icon size={22} color={cfg.color} />
               </div>
@@ -265,7 +274,7 @@ const animationFrameRef = useRef(null)
           })}
       </div>
 
-      {/* Center Stage & Content (Higher z-index, guaranteed no overlap) */}
+      {/* Center Stage & Content */}
       <div className="relative z-20 flex flex-col items-center text-center max-w-sm px-4 pointer-events-auto">
         <h1 className="text-[clamp(28px,6vmin,54px)] font-extrabold tracking-tight text-white leading-tight drop-shadow-md">
           Do you have
@@ -274,13 +283,7 @@ const animationFrameRef = useRef(null)
         <div ref={centerSlotRef} className="h-16 w-16 my-3 flex items-center justify-center relative">
           {exitingConfig && (
             <div
-              className="absolute w-14 h-14 rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/20 flex items-center justify-center transition-all"
-              style={{
-                transform: 'translateY(55px) scale(0.92, 1.1)',
-                opacity: 0,
-                transitionDuration: `${200 * DEBUG_SLOWMO}ms`,
-                transitionTimingFunction: 'cubic-bezier(0.77, 0, 0.175, 1)',
-              }}
+              className="absolute w-14 h-14 rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/20 flex items-center justify-center animate-s-curve-exit"
             >
               {React.createElement(exitingConfig.icon, { size: 26, color: exitingConfig.color })}
             </div>
@@ -289,17 +292,8 @@ const animationFrameRef = useRef(null)
           {activeConfig ? (
             <div
               className={`w-14 h-14 rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/20 flex items-center justify-center ${
-                isSlamming ? 'animate-icon-slam' : 'transition-transform'
+                stagePhase === 'descending' ? 'animate-s-curve-descend' : ''
               }`}
-              style={
-                !isSlamming
-                  ? {
-                      transform: 'scale(1)',
-                      transitionDuration: `${260 * DEBUG_SLOWMO}ms`,
-                      transitionTimingFunction: 'cubic-bezier(0.23, 1, 0.32, 1)',
-                    }
-                  : undefined
-              }
             >
               {React.createElement(activeConfig.icon, { size: 26, color: activeConfig.color })}
             </div>
