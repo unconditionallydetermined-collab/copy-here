@@ -1,3 +1,4 @@
+import logger from '../services/logger'
 import { useState, useRef, useEffect } from 'react'
 import { aiApi } from '../services/api'
 import { Bot, Send, Loader2, User, Sparkles } from 'lucide-react'

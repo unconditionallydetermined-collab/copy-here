@@ -1,3 +1,4 @@
+import logger from '../services/logger'
 import { useEffect, useState } from 'react'
 import { linkedinApi, profileApi, skillsApi } from '../services/api'
 import {
@@ -339,6 +340,8 @@ export default function LinkedInPage() {
   }
 
   const handleOptimize = async () => {
+    const startTime = Date.now()
+    logger.info('LinkedIn', 'Starting AI LinkedIn optimization')
     setOptimizing(true)
     try {
       const { data: optimized } = await linkedinApi.optimize()

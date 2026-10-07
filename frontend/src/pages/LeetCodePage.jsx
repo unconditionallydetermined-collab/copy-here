@@ -1,3 +1,4 @@
+import logger from '../services/logger'
 import { useEffect, useState } from 'react'
 import { leetcodeApi, profileApi } from '../services/api'
 import { Code2, RefreshCw, Loader2, Trophy } from 'lucide-react'
@@ -20,13 +21,21 @@ export default function LeetCodePage() {
   }, [])
 
   const handleSync = async () => {
+    const startTime = Date.now()
     if (!username.trim()) { toast.error('Set your LeetCode username in Profile first'); return }
     setSyncing(true)
     try {
+      logger.info('LeetCode', `Syncing LeetCode stats for @${username}`)
       const { data: d } = await leetcodeApi.sync(username)
+      const durationMs = Date.now() - startTime
       setData(d)
+      logger.info('LeetCode', `LeetCode stats synced for @${username} in ${durationMs}ms`, { totalSolved: d?.totalSolved, durationMs })
       toast.success('LeetCode stats synced!')
-    } catch { toast.error('Failed to fetch LeetCode stats') }
+    } catch (err) {
+      const durationMs = Date.now() - startTime
+      logger.error('LeetCode', `LeetCode sync failed after ${durationMs}ms: ${err.message}`, { durationMs, error: err.message })
+      toast.error('Failed to fetch LeetCode stats')
+    }
     finally { setSyncing(false) }
   }
 

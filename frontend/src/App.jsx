@@ -1,7 +1,10 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { Toaster } from 'sonner'
+import { useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { Toaster, toast as sonnerToast } from 'sonner'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import AppLayout from './components/AppLayout'
+import { ErrorBoundary } from './components/ErrorBoundary'
+import logger from './services/logger'
 
 import LandingPage   from './pages/LandingPage'
 import AboutPage     from './pages/AboutPage'
@@ -19,6 +22,7 @@ import JobsPage      from './pages/JobsPage'
 import GoalsPage     from './pages/GoalsPage'
 import AIAssistant   from './pages/AIAssistant'
 import PortfolioPage from './pages/PortfolioPage'
+import DebugPage     from './pages/DebugPage'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -39,54 +43,75 @@ function PublicRoute({ children }) {
   return user ? <Navigate to="/dashboard" replace /> : children
 }
 
+// Route change & toast telemetry tracker
+function RouteTelemetryTracker() {
+  const location = useLocation()
+
+  useEffect(() => {
+    logger.info('Navigation', `Route changed to ${location.pathname}${location.search}`, {
+      pathname: location.pathname,
+      search: location.search,
+      hash: location.hash
+    })
+  }, [location])
+
+  return null
+}
+
 function AppRoutes() {
   return (
-    <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/about" element={<AboutPage />} />
-      <Route path="/auth" element={<PublicRoute><AuthPage /></PublicRoute>} />
+    <>
+      <RouteTelemetryTracker />
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/about" element={<AboutPage />} />
+        <Route path="/auth" element={<PublicRoute><AuthPage /></PublicRoute>} />
 
-      <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-        <Route path="/dashboard"    element={<Dashboard />} />
-        <Route path="/profile"      element={<ProfilePage />} />
-        <Route path="/resume"       element={<ResumePage />} />
-        <Route path="/skills"       element={<SkillsPage />} />
-        <Route path="/github"       element={<GitHubPage />} />
-        <Route path="/leetcode"     element={<LeetCodePage />} />
-        <Route path="/linkedin"     element={<LinkedInPage />} />
-        <Route path="/projects"     element={<ProjectsPage />} />
-        <Route path="/certificates" element={<CertificatesPage />} />
-        <Route path="/jobs"         element={<JobsPage />} />
-        <Route path="/goals"        element={<GoalsPage />} />
-        <Route path="/ai-assistant" element={<AIAssistant />} />
-        <Route path="/portfolio"    element={<PortfolioPage />} />
-      </Route>
+        <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+          <Route path="/dashboard"    element={<Dashboard />} />
+          <Route path="/profile"      element={<ProfilePage />} />
+          <Route path="/resume"       element={<ResumePage />} />
+          <Route path="/skills"       element={<SkillsPage />} />
+          <Route path="/github"       element={<GitHubPage />} />
+          <Route path="/leetcode"     element={<LeetCodePage />} />
+          <Route path="/linkedin"     element={<LinkedInPage />} />
+          <Route path="/projects"     element={<ProjectsPage />} />
+          <Route path="/certificates" element={<CertificatesPage />} />
+          <Route path="/jobs"         element={<JobsPage />} />
+          <Route path="/goals"        element={<GoalsPage />} />
+          <Route path="/ai-assistant" element={<AIAssistant />} />
+          <Route path="/portfolio"    element={<PortfolioPage />} />
+          <Route path="/debug"        element={<DebugPage />} />
+        </Route>
 
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   )
 }
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <AppRoutes />
-        <Toaster
-          position="top-right"
-          richColors
-          closeButton
-          theme="system"
-          toastOptions={{
-            duration: 3500,
-            style: {
-              borderRadius: '12px',
-              backdropFilter: 'blur(16px)',
-              border: '1px solid rgba(226, 232, 240, 0.8)',
-            }
-          }}
-        />
-      </BrowserRouter>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <BrowserRouter>
+          <AppRoutes />
+          <Toaster
+            position="top-right"
+            richColors
+            closeButton
+            theme="system"
+            toastOptions={{
+              duration: 3500,
+              style: {
+                borderRadius: '12px',
+                backdropFilter: 'blur(16px)',
+                border: '1px solid rgba(226, 232, 240, 0.8)',
+              }
+            }}
+          />
+        </BrowserRouter>
+      </AuthProvider>
+    </ErrorBoundary>
   )
 }

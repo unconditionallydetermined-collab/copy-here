@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { resumeApi, aiApi, skillsApi } from '../services/api'
+import logger from '../services/logger'
 import { Upload, FileText, CheckCircle2, Loader2, Zap, Brain, RefreshCw, ExternalLink, PlusCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -16,7 +17,6 @@ function MarkdownText({ text }) {
         if (line.startsWith('**') && line.endsWith('**')) {
           return <p key={i} className="text-sm font-semibold text-slate-800 mt-2">{line.slice(2, -2)}</p>
         }
-        // Force all list items to render as circular bullet points (list-disc)
         if (line.startsWith('- ') || line.startsWith('* ')) {
           return <li key={i} className="text-sm text-slate-600 ml-4 list-disc">{line.slice(2)}</li>
         }
@@ -39,29 +39,55 @@ export default function ResumePage() {
   const [importingSkills, setImportingSkills] = useState(false)
 
   useEffect(() => {
+    logger.debug('ResumePage', 'Loading existing resume')
     resumeApi.get()
-      .then(r => setResume(r.data))
-      .catch(() => {})
+      .then(r => {
+        setResume(r.data)
+        logger.info('ResumePage', 'Loaded existing resume', { fileName: r.data?.fileName, skillsCount: r.data?.extractedSkills?.length })
+      })
+      .catch((err) => {
+        logger.debug('ResumePage', 'No existing resume or fetch error', { message: err.message })
+      })
       .finally(() => setLoading(false))
   }, [])
 
   const onDrop = useCallback(async (files) => {
     const file = files[0]
     if (!file) return
+
+    logger.info('ResumeUpload', 'File selected for upload', {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      lastModified: file.lastModified
+    })
+
     if (!file.name.match(/\.(pdf|docx|txt)$/i)) {
+      logger.warn('ResumeUpload', 'File rejected: unsupported extension', { fileName: file.name, type: file.type })
       toast.error('Only PDF, DOCX or TXT files are supported')
       return
     }
+
     setUploading(true)
     const toastId = toast.loading('Uploading... server may take a moment to wake up')
     const formData = new FormData()
     formData.append('file', file)
+    const startTime = Date.now()
+
     try {
+      logger.info('ResumeUpload', 'Sending upload request to backend', { fileName: file.name, size: file.size })
       const { data } = await resumeApi.upload(formData)
+      const durationMs = Date.now() - startTime
       setResume(data)
       setAnalysis(null)
+      logger.info('ResumeUpload', `Upload and extraction completed in ${durationMs}ms`, {
+        fileName: data.fileName,
+        skillsCount: data.extractedSkills?.length || 0,
+        durationMs
+      })
       toast.success('Resume uploaded successfully!', { id: toastId })
     } catch (err) {
+      const durationMs = Date.now() - startTime
       let errorMsg = 'Failed to upload resume'
       if (!err.response) {
         errorMsg = "Can't reach the server. It may be waking up, so try again in 30 seconds."
@@ -74,6 +100,15 @@ export default function ResumePage() {
       } else if (typeof err.response.data === 'string') {
         errorMsg = err.response.data
       }
+
+      logger.error('ResumeUpload', `Upload failed after ${durationMs}ms: ${errorMsg}`, {
+        fileName: file.name,
+        size: file.size,
+        status: err.response?.status,
+        durationMs,
+        response: err.response?.data
+      })
+
       toast.error(errorMsg, { id: toastId })
     } finally {
       setUploading(false)
@@ -84,6 +119,15 @@ export default function ResumePage() {
     const rejection = fileRejections[0]
     if (!rejection) return
     const error = rejection.errors[0]
+
+    logger.warn('ResumeUpload', 'Dropzone rejected file', {
+      fileName: rejection.file?.name,
+      fileSize: rejection.file?.size,
+      fileType: rejection.file?.type,
+      rejectionCode: error?.code,
+      rejectionMessage: error?.message
+    })
+
     if (error?.code === 'file-too-large') {
       toast.error('File is larger than 10 MB')
     } else if (error?.code === 'file-invalid-type') {
@@ -109,11 +153,17 @@ export default function ResumePage() {
 
   const handleAnalyze = async () => {
     setAnalyzing(true)
+    const startTime = Date.now()
+    logger.info('AI', 'AI Resume Review started', { resumeId: resume?.id })
     try {
       const { data } = await aiApi.resumeReview()
+      const durationMs = Date.now() - startTime
       setAnalysis(data)
+      logger.info('AI', `AI Resume Review succeeded in ${durationMs}ms`)
       toast.success('AI analysis complete!')
-    } catch {
+    } catch (err) {
+      const durationMs = Date.now() - startTime
+      logger.error('AI', `AI Resume Review failed after ${durationMs}ms`, { error: err.message, response: err.response?.data })
       toast.error('Analysis failed. Make sure you have a resume uploaded.')
     } finally {
       setAnalyzing(false)
@@ -125,8 +175,10 @@ export default function ResumePage() {
     setImportingSkills(true)
     try {
       await skillsApi.addBatch(resume.extractedSkills)
+      logger.info('Skills', `Imported ${resume.extractedSkills.length} skills from resume`)
       toast.success(`Successfully imported ${resume.extractedSkills.length} skills to your profile!`)
-    } catch {
+    } catch (err) {
+      logger.error('Skills', 'Failed to import skills from resume', { error: err.message })
       toast.error('Failed to import skills.')
     } finally {
       setImportingSkills(false)

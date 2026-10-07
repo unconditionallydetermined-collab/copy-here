@@ -1,3 +1,4 @@
+import logger from '../services/logger'
 import { useEffect, useState } from 'react'
 import { githubApi, profileApi } from '../services/api'
 import { Star, GitFork, RefreshCw, Loader2, ExternalLink, Users, BookOpen } from 'lucide-react'
@@ -20,6 +21,7 @@ export default function GitHubPage() {
   }, [])
 
   const handleSync = async (e) => {
+    const startTime = Date.now()
     if (e) e.preventDefault()
     const cleanUsername = username.trim()
     if (!cleanUsername) {
@@ -28,10 +30,15 @@ export default function GitHubPage() {
     }
     setSyncing(true)
     try {
+      logger.info('GitHub', `Syncing GitHub profile for @${cleanUsername}`)
       const { data: d } = await githubApi.sync(cleanUsername)
+      const durationMs = Date.now() - startTime
       setData(d)
+      logger.info('GitHub', `GitHub profile synced for @${cleanUsername} in ${durationMs}ms`, { repos: d?.publicRepos, stars: d?.starsCount, durationMs })
       toast.success(`GitHub data synced for @${cleanUsername}!`)
     } catch (err) {
+      const durationMs = Date.now() - startTime
+      logger.error('GitHub', `GitHub sync failed after ${durationMs}ms: ${err.message}`, { durationMs, error: err.message })
       toast.error('GitHub user not found or rate-limited. Verify username.')
     } finally {
       setSyncing(false)

@@ -7,6 +7,8 @@ import com.careersync.service.AiService;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -27,6 +29,8 @@ import java.util.zip.ZipInputStream;
 @RequestMapping("/api/v1/resume")
 public class ResumeController {
 
+    private static final Logger log = LoggerFactory.getLogger(ResumeController.class);
+
     private final ResumeRepository resumeRepository;
     private final AiService aiService;
 
@@ -38,8 +42,10 @@ public class ResumeController {
     @GetMapping
     public ResponseEntity<?> get(@AuthenticationPrincipal UserPrincipal p) {
         if (p == null) {
+            log.warn("GET /api/v1/resume: Unauthorized access attempt");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User is not authenticated");
         }
+        log.info("GET /api/v1/resume for userId={}", p.getUserId());
         return resumeRepository.findTopByUserIdOrderByUploadedAtDesc(p.getUserId())
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -47,6 +53,7 @@ public class ResumeController {
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<?> handleMaxSizeException(MaxUploadSizeExceededException exc) {
+        log.warn("Resume upload exceeded max file size: {}", exc.getMessage());
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
                 .body(Map.of("message", "File too large (max 10 MB)"));
     }
@@ -55,23 +62,38 @@ public class ResumeController {
     public ResponseEntity<?> upload(@AuthenticationPrincipal UserPrincipal p,
                                     @RequestParam("file") MultipartFile file) {
         if (p == null) {
+            log.warn("POST /api/v1/resume/upload: Unauthorized attempt");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("message", "User is not authenticated"));
         }
         if (file == null || file.isEmpty()) {
+            log.warn("POST /api/v1/resume/upload: No file provided or file is empty by userId={}", p.getUserId());
             return ResponseEntity.badRequest()
                     .body(Map.of("message", "Please select a file to upload"));
         }
 
+        String originalFilename = file.getOriginalFilename();
+        long fileSize = file.getSize();
+        String contentType = file.getContentType();
+
+        log.info("Resume upload received: name='{}', size={} bytes, contentType='{}', userId={}",
+                originalFilename, fileSize, contentType, p.getUserId());
+
         try {
-            String originalFilename = file.getOriginalFilename();
             String cleanName = (originalFilename != null && !originalFilename.isBlank())
                     ? Paths.get(originalFilename).getFileName().toString()
                     : "resume.pdf";
 
+            long extractStart = System.currentTimeMillis();
             String extractedText = extractTextInMemory(file, cleanName);
+            long extractDuration = System.currentTimeMillis() - extractStart;
+            int textLength = (extractedText != null) ? extractedText.length() : 0;
+
+            log.info("Resume text extracted: characters={}, duration={}ms, fileName='{}'",
+                    textLength, extractDuration, cleanName);
 
             if (extractedText == null || extractedText.trim().isEmpty()) {
+                log.warn("Resume text extraction resulted in empty text for file '{}'", cleanName);
                 if (cleanName.toLowerCase().endsWith(".pdf")) {
                     return ResponseEntity.badRequest()
                             .body(Map.of("message", "This PDF looks scanned, so upload a text-based PDF"));
@@ -82,6 +104,8 @@ public class ResumeController {
             }
 
             List<String> skills = extractSkills(extractedText);
+            log.info("Resume skills extracted: count={}, skills={}, fileName='{}'",
+                    skills.size(), skills, cleanName);
 
             Resume resume = new Resume();
             resume.setUserId(p.getUserId());
@@ -91,10 +115,20 @@ public class ResumeController {
             resume.setExtractedSkills(skills);
             resume.setUploadedAt(LocalDateTime.now());
 
-            return ResponseEntity.ok(resumeRepository.save(resume));
+            Resume saved = resumeRepository.save(resume);
+            log.info("Resume successfully saved to repository: id={}, userId={}, skillsCount={}",
+                    saved.getId(), saved.getUserId(), saved.getExtractedSkills() != null ? saved.getExtractedSkills().size() : 0);
+
+            return ResponseEntity.ok(saved);
         } catch (IOException e) {
+            log.error("IOException while processing resume upload '{}' for userId={}: {}",
+                    originalFilename, p.getUserId(), e.getMessage(), e);
             return ResponseEntity.badRequest()
                     .body(Map.of("message", "Failed to upload resume: " + e.getMessage()));
+        } catch (Exception e) {
+            log.error("Unexpected exception processing resume upload '{}' for userId={}: {}",
+                    originalFilename, p.getUserId(), e.getMessage(), e);
+            throw e;
         }
     }
 
@@ -111,7 +145,7 @@ public class ResumeController {
                 PDFTextStripper stripper = new PDFTextStripper();
                 return stripper.getText(doc);
             } catch (Exception ex) {
-                System.err.println("Warning: could not extract text from PDF: " + ex.getMessage());
+                log.warn("Could not extract text from PDF '{}': {}", cleanName, ex.getMessage(), ex);
                 return "";
             }
         } else if (lowerName.endsWith(".docx")) {
@@ -132,7 +166,7 @@ public class ResumeController {
                 }
             }
         } catch (Exception e) {
-            System.err.println("DOCX extraction error: " + e.getMessage());
+            log.warn("DOCX extraction error: {}", e.getMessage(), e);
         }
         return "";
     }

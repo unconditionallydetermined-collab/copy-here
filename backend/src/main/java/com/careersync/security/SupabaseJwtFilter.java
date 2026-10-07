@@ -11,6 +11,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -40,6 +42,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 public class SupabaseJwtFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(SupabaseJwtFilter.class);
 
     @Value("${supabase.url:https://zacjxebtcegivtekzipz.supabase.co}")
     private String supabaseUrl;
@@ -79,6 +83,7 @@ public class SupabaseJwtFilter extends OncePerRequestFilter {
 
         String token = authHeader.substring(7).trim();
         if (token.isEmpty()) {
+            log.warn("JWT validation: INVALID - Bearer token is empty");
             filterChain.doFilter(request, response);
             return;
         }
@@ -86,12 +91,14 @@ public class SupabaseJwtFilter extends OncePerRequestFilter {
         try {
             String supabaseUid = null;
             String email = null;
+            String validationMethod = null;
 
             // Step 1: Validate signature with JWKS (ES256 / RSA) or HMAC (HS256)
             Claims claims = parseJwt(token);
             if (claims != null) {
                 supabaseUid = claims.getSubject();
                 email = claims.get("email", String.class);
+                validationMethod = "JWKS_OR_HMAC_SIGNATURE";
             }
 
             // Step 2: Fallback to Supabase /auth/v1/user verification API
@@ -100,6 +107,7 @@ public class SupabaseJwtFilter extends OncePerRequestFilter {
                 if (apiUser != null) {
                     supabaseUid = apiUser[0];
                     email = apiUser[1];
+                    validationMethod = "SUPABASE_AUTH_API";
                 }
             }
 
@@ -109,17 +117,30 @@ public class SupabaseJwtFilter extends OncePerRequestFilter {
                 if (fallback != null) {
                     supabaseUid = fallback[0];
                     email = fallback[1];
+                    validationMethod = "LOCAL_PAYLOAD_FALLBACK";
                 }
             }
 
             if (supabaseUid != null) {
+                log.info("JWT validation: VALID (method={}, uid={}, email={})",
+                        validationMethod, supabaseUid, maskEmail(email));
                 setAuthentication(supabaseUid, email);
+            } else {
+                log.warn("JWT validation: INVALID - Signature verification and fallback checks failed");
             }
         } catch (Exception e) {
-            logger.warn("JWT processing failed: " + e.getMessage());
+            log.warn("JWT validation: INVALID - Processing exception: {}", e.getMessage());
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private static String maskEmail(String email) {
+        if (email == null || !email.contains("@")) return email;
+        String[] parts = email.split("@", 2);
+        String prefix = parts[0];
+        String maskedPrefix = prefix.length() <= 1 ? prefix + "***" : prefix.substring(0, 1) + "***";
+        return maskedPrefix + "@" + parts[1];
     }
 
     private Claims parseJwt(String token) {
@@ -187,11 +208,11 @@ public class SupabaseJwtFilter extends OncePerRequestFilter {
                         }
                     }
                     lastJwksFetch = System.currentTimeMillis();
-                    logger.info("Successfully loaded Supabase JWKS keys: " + jwksKeyCache.keySet());
+                    log.info("Successfully loaded Supabase JWKS keys: {}", jwksKeyCache.keySet());
                 }
             }
         } catch (Exception e) {
-            logger.warn("Could not fetch Supabase JWKS: " + e.getMessage());
+            log.warn("Could not fetch Supabase JWKS: {}", e.getMessage());
         }
     }
 
@@ -244,7 +265,7 @@ public class SupabaseJwtFilter extends OncePerRequestFilter {
                 }
             }
         } catch (Exception e) {
-            logger.debug("Supabase user API check failed: " + e.getMessage());
+            log.debug("Supabase user API check failed: {}", e.getMessage());
         }
         return null;
     }
@@ -258,12 +279,12 @@ public class SupabaseJwtFilter extends OncePerRequestFilter {
                 String sub = payload.path("sub").asText(null);
                 String email = payload.path("email").asText(null);
                 if (sub != null && !sub.isBlank()) {
-                    logger.warn("Using unverified JWT payload for user sub: " + sub);
+                    log.warn("Using unverified JWT payload for user sub: {}", sub);
                     return new String[]{sub, email};
                 }
             }
         } catch (Exception e) {
-            logger.warn("Failed to extract JWT payload: " + e.getMessage());
+            log.warn("Failed to extract JWT payload: {}", e.getMessage());
         }
         return null;
     }
