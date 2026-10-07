@@ -4,6 +4,25 @@ import { aiApi } from '../services/api'
 import { Bot, Send, Loader2, User, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 
+function getChatErrorMessage(error) {
+  const status = error?.response?.status
+  const serverMessage = error?.response?.data?.message
+
+  if (status === 401 || status === 403) {
+    return 'Your sign-in could not be verified by the AI service. Refresh your session, then try again.'
+  }
+  if (status === 429) {
+    return 'The AI service is busy right now. Wait a moment and try again.'
+  }
+  if (status >= 500) {
+    return serverMessage || 'The AI service had a problem processing that request. Please try again shortly.'
+  }
+  if (!error?.response) {
+    return 'Could not reach the Career Sync server. Check your connection and try again.'
+  }
+  return serverMessage || 'Your message could not be processed. Please try again.'
+}
+
 const SUGGESTED = [
   'Am I ready for an SDE internship?',
   'What skills should I learn next?',
@@ -54,8 +73,12 @@ export default function AIAssistant() {
     try {
       const { data } = await aiApi.chat(msg)
       setMessages(prev => [...prev, { role: 'ai', text: data.response }])
-    } catch {
-      setMessages(prev => [...prev, { role: 'ai', text: '⚠️ Sorry, I encountered an error. Please check your API configuration.' }])
+    } catch (error) {
+      logger.error('AI Assistant', 'Chat request failed', {
+        status: error?.response?.status,
+        message: error?.response?.data?.message || error?.message,
+      })
+      setMessages(prev => [...prev, { role: 'ai', text: `⚠️ ${getChatErrorMessage(error)}` }])
     } finally {
       setLoading(false)
     }
@@ -72,8 +95,12 @@ export default function AIAssistant() {
       ])
       setSkillGapMode(false)
       setJobDesc('')
-    } catch {
-      toast.error('Skill gap analysis failed')
+    } catch (error) {
+      logger.error('AI Assistant', 'Skill-gap request failed', {
+        status: error?.response?.status,
+        message: error?.response?.data?.message || error?.message,
+      })
+      toast.error(getChatErrorMessage(error))
     } finally {
       setAnalyzing(false) }
   }
@@ -84,7 +111,7 @@ export default function AIAssistant() {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="page-title">AI Career Assistant</h2>
-          <p className="page-subtitle">Powered by Gemini · Context-aware career guidance</p>
+          <p className="page-subtitle">Context-aware career guidance</p>
         </div>
         <button
           onClick={() => setSkillGapMode(!skillGapMode)}

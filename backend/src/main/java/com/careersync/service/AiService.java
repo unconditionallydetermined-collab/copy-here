@@ -33,21 +33,25 @@ public class AiService {
     }
 
     public String callGemini(String prompt) {
-        if (geminiApiKey == null || geminiApiKey.equals("your-gemini-api-key")) {
-            return getMockResponse(prompt);
+        if (geminiApiKey == null || geminiApiKey.isBlank()
+                || geminiApiKey.equals("your-gemini-api-key")) {
+            throw new IllegalStateException(
+                    "AI is not configured on the server. Add a valid GEMINI_API_KEY in the backend environment settings.");
         }
 
-        // Try primary URL, then fallback active models if primary is busy or rate-limited
+        String configuredUrl = (geminiApiUrl == null || geminiApiUrl.isBlank())
+                ? "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent"
+                : geminiApiUrl.trim();
         List<String> targetUrls = new ArrayList<>();
-        targetUrls.add(geminiApiUrl);
-        if (!geminiApiUrl.contains("gemini-3.5-flash-lite")) {
+        targetUrls.add(configuredUrl);
+        if (!configuredUrl.contains("gemini-3.5-flash-lite")) {
             targetUrls.add("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent");
         }
-        targetUrls.add("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent");
 
+        Integer lastStatus = null;
         for (String endpoint : targetUrls) {
             try {
-                String url = endpoint + "?key=" + geminiApiKey;
+                String url = endpoint + (endpoint.contains("?") ? "&" : "?") + "key=" + geminiApiKey;
                 Map<String, Object> requestBody = Map.of(
                     "contents", List.of(Map.of(
                         "parts", List.of(Map.of("text", prompt))
@@ -66,21 +70,24 @@ public class AiService {
                     JsonNode responseNode = objectMapper.readTree(response);
                     JsonNode candidates = responseNode.path("candidates");
                     if (candidates.isArray() && !candidates.isEmpty()) {
-                        String text = candidates.get(0)
-                                .path("content").path("parts").get(0)
-                                .path("text").asText("");
-                        if (!text.isBlank()) {
-                            // Ensure all numbered items in the AI output are standardized to bullet points
-                            return convertNumberedListsToBullets(text);
+                        JsonNode parts = candidates.get(0).path("content").path("parts");
+                        if (parts.isArray() && !parts.isEmpty()) {
+                            String text = parts.get(0).path("text").asText("");
+                            if (!text.isBlank()) return convertNumberedListsToBullets(text);
                         }
                     }
                 }
+            } catch (org.springframework.web.reactive.function.client.WebClientResponseException e) {
+                lastStatus = e.getStatusCode().value();
             } catch (Exception e) {
-                // Try next endpoint or fall back
+                // Try the supported fallback model without exposing provider details or the API key.
             }
         }
 
-        return getMockResponse(prompt);
+        String detail = lastStatus == null ? "The provider could not be reached."
+                : "The provider returned HTTP " + lastStatus + ".";
+        throw new IllegalStateException("Gemini could not generate a response. " + detail
+                + " Check GEMINI_API_KEY and GEMINI_API_URL in the backend environment settings.");
     }
 
     private String convertNumberedListsToBullets(String text) {
