@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import AppLayout from './components/AppLayout'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import logger from './services/logger'
+import { initKeepAlive } from './services/api'
 
 import LandingPage   from './pages/LandingPage'
 import AboutPage     from './pages/AboutPage'
@@ -95,6 +96,9 @@ function AppRoutes() {
 }
 
 export default function App() {
+  useEffect(() => {
+    initKeepAlive()
+  }, [])
   // Pre-warm / ping Render backend on app open so user avoids cold-start latency
   useEffect(() => {
     const pingBackend = async () => {

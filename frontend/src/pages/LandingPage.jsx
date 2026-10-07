@@ -10,7 +10,9 @@ const PLATFORM_CONFIG = {
     id: 'github',
     name: 'GitHub',
     label: 'GitHub',
-    targetPercent: 84,
+    targetPercent: 80,
+    prefix: 'Over ',
+    suffix: 'of open-source lives on GitHub',
     color: '#F8FAFC',
     icon: Github,
   },
@@ -18,7 +20,9 @@ const PLATFORM_CONFIG = {
     id: 'leetcode',
     name: 'LeetCode',
     label: 'LeetCode',
-    targetPercent: 78,
+    targetPercent: 90,
+    prefix: '',
+    suffix: 'of companies check LeetCode',
     color: '#FFA116',
     icon: Code2,
   },
@@ -26,7 +30,9 @@ const PLATFORM_CONFIG = {
     id: 'linkedin',
     name: 'LinkedIn',
     label: 'LinkedIn',
-    targetPercent: 92,
+    targetPercent: 90,
+    prefix: 'Over ',
+    suffix: 'of recruiters use LinkedIn to hire',
     color: '#38BDF8',
     icon: Linkedin,
   },
@@ -34,7 +40,9 @@ const PLATFORM_CONFIG = {
     id: 'skills',
     name: 'Skills',
     label: 'Skills',
-    targetPercent: 96,
+    targetPercent: 90,
+    prefix: 'Exactly. You control the ',
+    suffix: '',
     color: '#FACC15',
     icon: Lightbulb,
   },
@@ -142,6 +150,7 @@ export default function LandingPage() {
   const [ctaShimmerCycle, setCtaShimmerCycle] = useState(0)
   const [pulseRingActive, setPulseRingActive] = useState(false)
   const [ctaAttention, setCtaAttention] = useState(false)
+  const [showOnboarding, setShowOnboarding] = useState(false)
   const [centerCoords, setCenterCoords] = useState({ x: 0, y: 0 })
 
   const heroWrapperRef = useRef(null)
@@ -968,18 +977,11 @@ export default function LandingPage() {
                 )}
               </span>
               <p className="text-[clamp(14px,2.2vmin,18px)] font-medium text-slate-300 mt-0.5">
+                {activeConfig.prefix && <span>{activeConfig.prefix}</span>}
                 <span className="font-bold text-white tabular-nums inline-block min-w-[2.5ch] text-right">
                   {displayCount}%
-                </span>{' '}
-                {textPhase === 'entering' ? (
-                  <AnimatedChars
-                    text={`of companies hire through ${activeConfig.label.toLowerCase()}`}
-                    baseDelay={80}
-                    speed={16}
-                  />
-                ) : (
-                  `of companies hire through ${activeConfig.label.toLowerCase()}`
-                )}
+                </span>
+                {activeConfig.suffix && <span> {activeConfig.suffix}</span>}
               </p>
             </div>
           ) : (
@@ -988,9 +990,9 @@ export default function LandingPage() {
         </div>
 
         {/* 3. White button "Get a job you'll love" with CTA text shimmer and attention highlight */}
-        <Link
+        <button
           ref={buttonRef}
-          to="/auth"
+          onClick={() => setShowOnboarding(true)}
           className={`relative overflow-hidden mt-5 inline-flex items-center justify-center min-w-[170px] min-h-[48px] px-8 py-3 rounded-xl bg-white text-slate-950 font-semibold text-base shadow-[0_0_0_1px_rgba(255,255,255,0.35)] active:scale-[0.97] transition-all duration-300 ease-out touch-manipulation select-none [@media(hover:hover)_and_(pointer:fine)]:hover:bg-slate-100 ${
             ctaAttention
               ? 'ring-2 ring-white shadow-[0_0_40px_rgba(255,255,255,0.85),0_0_80px_rgba(255,255,255,0.4)] scale-[1.03]'
@@ -1020,7 +1022,7 @@ export default function LandingPage() {
               </span>
             )}
           </span>
-        </Link>
+        </button>
 
         {/* 4. Secondary Sign in link below button */}
         <div ref={signInRef} className="mt-3.5 flex items-center justify-center gap-1.5 text-sm text-slate-400">
