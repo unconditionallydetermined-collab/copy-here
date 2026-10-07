@@ -56,7 +56,7 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    logger.error('API', `Request failed: ${err.message}`)
+    logger.error('API', `Request failed: ${err.message}`, { url: err.config?.url, baseURL: err.config?.baseURL, status: err.response?.status, requestId: err.config?.metadata?.requestId })
     return Promise.reject(err)
   }
 )
