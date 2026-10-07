@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
 
 const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
-  { className = '', onSlam, onConvergeComplete },
+  { className = '', onSlam },
   ref
 ) {
   const canvasRef = useRef(null)
@@ -10,13 +10,15 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
   const wavesRef = useRef([])
   const hoverLightsRef = useRef([])
   const streamParticlesRef = useRef([])
+  const glowDimRef = useRef(1.0) // 1.0 = full bold glow, decays when powerup loads
 
   useImperativeHandle(ref, () => ({
     triggerSlam: (clientX, clientY, options = {}) => {
       triggerSlamInternal(clientX, clientY, options)
     },
-    setHoverLights: (lights = []) => {
+    setHoverLights: (lights = [], dim = 1.0) => {
       hoverLightsRef.current = lights
+      glowDimRef.current = dim
     },
   }))
 
@@ -27,23 +29,23 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
     const x = clientX !== undefined ? clientX - rect.left : rect.width / 2
     const y = clientY !== undefined ? clientY - rect.top : rect.height / 2
 
-    const intensity = options.intensity || 340
-    const blastRadius = options.blastRadius || 120
+    const intensity = options.intensity || 360
+    const blastRadius = options.blastRadius || 135
 
     // Concentric propagating wave
     wavesRef.current.push({
       x,
       y,
       radius: 0,
-      speed: 520,
+      speed: 540,
       maxRadius: Math.max(rect.width, rect.height) * 0.95,
       intensity,
-      width: 60,
+      width: 64,
       life: 1.0,
-      decay: 0.62,
+      decay: 0.6,
     })
 
-    // Immediate physical grid splash displacement
+    // Strong physical grid splash displacement
     const dots = dotsRef.current
     for (let i = 0; i < dots.length; i++) {
       const dot = dots[i]
@@ -54,39 +56,38 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
       if (distSq < blastRadius * blastRadius && distSq > 0.001) {
         const dist = Math.sqrt(distSq)
         const falloff = 1 - dist / blastRadius
-        const blastForce = falloff * 280
+        const blastForce = falloff * 310
         dot.vx += (dx / dist) * blastForce
         dot.vy += (dy / dist) * blastForce
       }
     }
 
-    // Spawn returning particles that stream & converge onto the button
+    // Returning dots stream and converge toward CTA button
     const targetX = options.targetX ?? (rect.width / 2)
-    const targetY = options.targetY ?? (rect.height * 0.68)
+    const targetY = options.targetY ?? (rect.height * 0.72)
 
-    // Schedule convergence stream as waves rebound
     setTimeout(() => {
       const particles = []
-      const count = 38
+      const count = 42
       for (let i = 0; i < count; i++) {
-        const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.3
-        const dist = 70 + Math.random() * 110
+        const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.4
+        const dist = 75 + Math.random() * 120
         particles.push({
           x: x + Math.cos(angle) * dist,
           y: y + Math.sin(angle) * dist,
-          vx: Math.cos(angle) * (20 + Math.random() * 40),
-          vy: Math.sin(angle) * (20 + Math.random() * 40),
+          vx: Math.cos(angle) * (24 + Math.random() * 45),
+          vy: Math.sin(angle) * (24 + Math.random() * 45),
           targetX,
           targetY,
           progress: 0,
-          speed: 0.52 + Math.random() * 0.35,
-          alpha: 0.9,
-          size: 1.6 + Math.random() * 1.8,
-          hue: 200 + Math.random() * 30,
+          speed: 0.48 + Math.random() * 0.32,
+          alpha: 0.95,
+          size: 2.2 + Math.random() * 2.2,
+          hue: 205 + Math.random() * 25,
         })
       }
       streamParticlesRef.current.push(...particles)
-    }, 700)
+    }, 650)
 
     if (typeof onSlam === 'function') {
       onSlam({ x, y })
@@ -141,7 +142,7 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
     window.addEventListener('resize', handleResize)
 
     const handlePointerDown = (e) => {
-      triggerSlamInternal(e.clientX, e.clientY, { intensity: 300, blastRadius: 100 })
+      triggerSlamInternal(e.clientX, e.clientY, { intensity: 320, blastRadius: 110 })
     }
 
     canvas.addEventListener('pointerdown', handlePointerDown)
@@ -157,8 +158,9 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
       const waves = wavesRef.current
       const lights = hoverLightsRef.current
       const particles = streamParticlesRef.current
+      const dimFactor = glowDimRef.current
 
-      // 1. Advance waves & propagate impulse across grid dots
+      // 1. Advance waves
       for (let i = waves.length - 1; i >= 0; i--) {
         const w = waves[i]
         w.radius += w.speed * dt
@@ -194,7 +196,7 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
         }
       }
 
-      // 2. Spring Physics for grid
+      // 2. Spring Physics
       for (let i = 0; i < dots.length; i++) {
         const dot = dots[i]
         const dispX = dot.x - dot.ox
@@ -214,8 +216,8 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
       ctx.fillStyle = '#0a0a0a'
       ctx.fillRect(0, 0, width, height)
 
-      // 4. Render dots with visible grid splash displacement & orbit glow
-      const LIGHT_RADIUS = 40
+      // 4. Render dots with bold, unsubtle orbit glow
+      const LIGHT_RADIUS = 52
       const LIGHT_RADIUS_SQ = LIGHT_RADIUS * LIGHT_RADIUS
 
       for (let i = 0; i < dots.length; i++) {
@@ -226,21 +228,24 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
 
         let energy = Math.min(1, disp / 6)
 
-        for (let l = 0; l < lights.length; l++) {
-          const lx = lights[l].x - dot.ox
-          const ly = lights[l].y - dot.oy
-          const lDistSq = lx * lx + ly * ly
-          if (lDistSq < LIGHT_RADIUS_SQ) {
-            const lFactor = 1 - Math.sqrt(lDistSq) / LIGHT_RADIUS
-            energy = Math.max(energy, lFactor * 0.95)
+        // Bold illumination under moving icons (scaled by dimFactor)
+        if (dimFactor > 0.01) {
+          for (let l = 0; l < lights.length; l++) {
+            const lx = lights[l].x - dot.ox
+            const ly = lights[l].y - dot.oy
+            const lDistSq = lx * lx + ly * ly
+            if (lDistSq < LIGHT_RADIUS_SQ) {
+              const lFactor = (1 - Math.sqrt(lDistSq) / LIGHT_RADIUS) * dimFactor
+              energy = Math.max(energy, lFactor * 1.5)
+            }
           }
         }
 
-        const alpha = 0.35 + 0.6 * energy
-        const radius = BASE_DOT_RADIUS + 1.1 * energy
+        const alpha = Math.min(1, 0.35 + 0.65 * energy)
+        const radius = BASE_DOT_RADIUS + 2.2 * Math.min(1, energy)
 
-        ctx.fillStyle = energy > 0.08
-          ? `rgba(${Math.round(210 + 45 * energy)}, ${Math.round(220 + 35 * energy)}, 255, ${alpha.toFixed(3)})`
+        ctx.fillStyle = energy > 0.1
+          ? `rgba(${Math.round(210 + 45 * energy)}, ${Math.round(230 + 25 * energy)}, 255, ${alpha.toFixed(3)})`
           : 'rgba(180, 185, 195, 0.35)'
 
         ctx.beginPath()
@@ -248,7 +253,7 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
         ctx.fill()
       }
 
-      // 5. Update and render converging stream dots toward CTA button
+      // 5. Converging Stream dots toward CTA button
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i]
         p.progress += dt * p.speed
@@ -257,13 +262,12 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
         const dy = p.targetY - p.y
         const dist = Math.sqrt(dx * dx + dy * dy)
 
-        if (dist < 18 || p.progress >= 1.0) {
+        if (dist < 16 || p.progress >= 1.0) {
           particles.splice(i, 1)
           continue
         }
 
-        // Steer toward target with acceleration curve
-        const pull = 600 + p.progress * 900
+        const pull = 650 + p.progress * 950
         p.vx += (dx / dist) * pull * dt
         p.vy += (dy / dist) * pull * dt
         p.vx *= 0.88
@@ -272,8 +276,8 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
         p.x += p.vx * dt
         p.y += p.vy * dt
 
-        const pAlpha = Math.max(0, 1 - p.progress * 0.8)
-        ctx.fillStyle = `hsla(${p.hue}, 95%, 70%, ${pAlpha.toFixed(2)})`
+        const pAlpha = Math.max(0, 1 - p.progress * 0.75)
+        ctx.fillStyle = `hsla(${p.hue}, 100%, 75%, ${pAlpha.toFixed(2)})`
         ctx.beginPath()
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2)
         ctx.fill()

@@ -46,6 +46,7 @@ export default function LandingPage() {
   const [exitingStageId, setExitingStageId] = useState(null)
   const [stagePhase, setStagePhase] = useState('idle') // 'idle' | 'striking'
   const [poweringId, setPoweringId] = useState(null)
+  const [textPhase, setTextPhase] = useState('idle') // 'idle' | 'exiting' | 'entering'
   const [buttonShimmer, setButtonShimmer] = useState(false)
   const [displayCount, setDisplayCount] = useState(PLATFORM_CONFIG.github.targetPercent)
   const [reducedMotion, setReducedMotion] = useState(false)
@@ -59,6 +60,7 @@ export default function LandingPage() {
   const activeStageIdRef = useRef('github')
   const incomingCandidateRef = useRef('leetcode')
   const pausedAtApexRef = useRef(null)
+  const glowDimRef = useRef(1.0)
 
   const anglesRef = useRef({
     github: 0,
@@ -97,7 +99,7 @@ export default function LandingPage() {
     return () => window.removeEventListener('resize', calcRadius)
   }, [])
 
-  // 60fps orbit loop with elastic anti-collision & apex detection
+  // 60fps orbit loop with bold glow and elastic collision avoidance
   useEffect(() => {
     if (reducedMotion) return
     let lastTime = performance.now()
@@ -112,10 +114,9 @@ export default function LandingPage() {
         const activeOrbiters = BADGES.filter((id) => orbitingRef.current[id])
         const candidate = incomingCandidateRef.current
 
-        // Check if candidate reached top apex naturally along circular path (360° or 0°)
+        // Check if candidate naturally completed circular motion to apex (top = 0 deg)
         if (candidate && orbitingRef.current[candidate] && !pausedAtApexRef.current) {
           const currentDeg = angles[candidate] % 360
-          // If within reach of apex (top = 0 deg)
           if (currentDeg >= 354 || currentDeg <= 6) {
             angles[candidate] = 0
             pausedAtApexRef.current = candidate
@@ -123,7 +124,7 @@ export default function LandingPage() {
           }
         }
 
-        // Advance each orbiting icon with elastic spacing to strictly prevent overlaps
+        // Advance orbiting icons with spring elasticity to prevent overlapping
         activeOrbiters.forEach((id) => {
           if (pausedAtApexRef.current === id) {
             angles[id] = 0
@@ -133,16 +134,14 @@ export default function LandingPage() {
           let speedFactor = 1.0
           const myDeg = angles[id] % 360
 
-          // Elastic collision avoidance against other orbiting badges ahead
           activeOrbiters.forEach((otherId) => {
             if (otherId === id) return
             const otherDeg = angles[otherId] % 360
             let gap = (otherDeg - myDeg + 360) % 360
 
-            // If badge ahead is within 70 degrees, apply elastic deceleration
             const MIN_SAFE_GAP = 72
             if (gap > 0 && gap < MIN_SAFE_GAP) {
-              const elasticity = Math.max(0.05, (gap - 18) / (MIN_SAFE_GAP - 18))
+              const elasticity = Math.max(0.04, (gap - 16) / (MIN_SAFE_GAP - 16))
               speedFactor = Math.min(speedFactor, elasticity)
             }
           })
@@ -178,7 +177,7 @@ export default function LandingPage() {
         })
 
         if (rippleRef.current) {
-          rippleRef.current.setHoverLights(lights)
+          rippleRef.current.setHoverLights(lights, glowDimRef.current)
         }
       }
 
@@ -189,7 +188,7 @@ export default function LandingPage() {
     return () => cancelAnimationFrame(animationFrameRef.current)
   }, [reducedMotion, badgeRadius])
 
-  // Choreography for powerup & direct asteroid strike
+  // Queue next stage transition
   useEffect(() => {
     if (reducedMotion) {
       setActiveStageId('skills')
@@ -209,7 +208,7 @@ export default function LandingPage() {
       incomingCandidateRef.current = nextId
     }
 
-    const interval = setInterval(scheduleNextCycle, 5800)
+    const interval = setInterval(scheduleNextCycle, 6400)
 
     return () => {
       isDestroyed = true
@@ -218,12 +217,20 @@ export default function LandingPage() {
     }
   }, [reducedMotion])
 
-  // Triggered when a badge has reached the top apex and acquired powerup
+  // Choreography: apex pause -> powerup -> s-curve text exit -> asteroid strike -> slam & text in -> button shimmer
   useEffect(() => {
     if (!poweringId) return
 
-    const timer = setTimeout(() => {
-      // 1. Release from orbit into asteroid strike mode
+    // 1. As powerup loads, s-curve/dim away glow under other orbs so focus snaps to top
+    glowDimRef.current = 0.15
+
+    // 2. While asteroid is about to strike, get rid of text below by S-curving it out
+    const textExitTimer = setTimeout(() => {
+      setTextPhase('exiting')
+    }, 380)
+
+    // 3. Powerup completes: launch asteroid straight down into center
+    const strikeTimer = setTimeout(() => {
       const strikingId = poweringId
       setPoweringId(null)
       pausedAtApexRef.current = null
@@ -235,16 +242,19 @@ export default function LandingPage() {
       setActiveStageId(strikingId)
       setStagePhase('striking')
 
-      // 2. Return previous icon back to orbit queue
+      // Return previous icon back to orbit queue
       setTimeout(() => {
         orbitingRef.current[prevActive] = true
         anglesRef.current[prevActive] = 230
         setExitingStageId(null)
       }, 420)
 
-      // 3. Impact slam when asteroid strikes center icon (~400ms)
+      // Asteroid impact at center: slam physical water grid & new text slams in
       setTimeout(() => {
         setStagePhase('idle')
+        setTextPhase('entering')
+        glowDimRef.current = 1.0 // Glow returns to orbit
+
         if (centerSlotRef.current && rippleRef.current) {
           const rect = centerSlotRef.current.getBoundingClientRect()
           const cx = rect.left + rect.width / 2
@@ -259,39 +269,45 @@ export default function LandingPage() {
           }
 
           rippleRef.current.triggerSlam(cx, cy, {
-            intensity: 340,
-            blastRadius: 130,
+            intensity: 360,
+            blastRadius: 135,
             targetX: btnX,
             targetY: btnY,
           })
         }
+
+        // Percentage counter roll-up
+        const target = PLATFORM_CONFIG[strikingId].targetPercent
+        let current = 0
+        setDisplayCount(0)
+        clearInterval(countIntervalRef.current)
+        const stepTime = 800 / target
+        countIntervalRef.current = setInterval(() => {
+          current += 2
+          if (current >= target) {
+            setDisplayCount(target)
+            clearInterval(countIntervalRef.current)
+          } else {
+            setDisplayCount(current)
+          }
+        }, stepTime)
       }, 400)
+    }, 780)
 
-      // 4. Update percentage counter
-      const target = PLATFORM_CONFIG[strikingId].targetPercent
-      let current = 0
-      setDisplayCount(0)
-      clearInterval(countIntervalRef.current)
-      const stepTime = 800 / target
-      countIntervalRef.current = setInterval(() => {
-        current += 2
-        if (current >= target) {
-          setDisplayCount(target)
-          clearInterval(countIntervalRef.current)
-        } else {
-          setDisplayCount(current)
-        }
-      }, stepTime)
-    }, 750) // Powerup duration at apex
-
-    return () => clearTimeout(timer)
+    return () => {
+      clearTimeout(textExitTimer)
+      clearTimeout(strikeTimer)
+    }
   }, [poweringId])
 
   const handleSplash = () => {
-    // Shimmer triggers as returning converging dots converge into the button (~2.4s)
+    // Wait as returning glow dots stream to button, then subtle CTA animation triggers
     setTimeout(() => {
       setButtonShimmer(true)
-      setTimeout(() => setButtonShimmer(false), 950)
+      setTimeout(() => {
+        setButtonShimmer(false)
+        setTextPhase('idle')
+      }, 950)
     }, 2400)
   }
 
@@ -308,7 +324,7 @@ export default function LandingPage() {
     >
       <WaterRippleCanvas ref={rippleRef} onSlam={handleSplash} className="z-0" />
 
-      {/* Orbit Track with direct transforms and anti-overlap elasticity */}
+      {/* Orbit Track with bold glow and elastic spacing */}
       <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
         {!reducedMotion &&
           BADGES.map((id) => {
@@ -323,8 +339,8 @@ export default function LandingPage() {
                   badgeDomRefs.current[id] = el
                 }}
                 aria-label={cfg.name}
-                className={`absolute w-12 h-12 rounded-full bg-slate-900/85 backdrop-blur-md shadow-xl border border-white/10 flex items-center justify-center will-change-transform transition-shadow duration-300 ${
-                  isPowering ? 'animate-powerup ring-2 ring-white' : ''
+                className={`absolute w-12 h-12 rounded-full bg-slate-900/85 backdrop-blur-md shadow-xl border border-white/10 flex items-center justify-center will-change-transform transition-all duration-300 ${
+                  isPowering ? 'animate-powerup ring-2 ring-white scale-110' : ''
                 }`}
               >
                 <Icon size={22} color={cfg.color} />
@@ -361,13 +377,17 @@ export default function LandingPage() {
           )}
         </div>
 
-        <div aria-live="polite" className="h-14 flex flex-col items-center justify-center">
+        {/* Text area with S-curve exit and slam entrance */}
+        <div aria-live="polite" className="h-14 flex flex-col items-center justify-center overflow-visible">
           {activeConfig ? (
             <div
-              className="flex flex-col items-center transition-all"
-              style={{
-                animation: `fadeIn 250ms cubic-bezier(0.23, 1, 0.32, 1) forwards`,
-              }}
+              className={`flex flex-col items-center will-change-transform ${
+                textPhase === 'exiting'
+                  ? 'animate-text-scurve-out'
+                  : textPhase === 'entering'
+                  ? 'animate-text-slam-in'
+                  : ''
+              }`}
             >
               <span className="text-xs uppercase font-bold tracking-wider text-slate-400">
                 {activeConfig.label}
@@ -387,7 +407,7 @@ export default function LandingPage() {
         <Link
           ref={buttonRef}
           to="/auth"
-          className={`relative overflow-hidden mt-6 inline-flex items-center justify-center min-h-[48px] px-8 py-3 rounded-xl bg-white text-slate-950 font-semibold text-base shadow-xl shadow-black/50 active:scale-[0.97] transition-all duration-200 ease-out hover:bg-slate-100 touch-manipulation select-none ${
+          className={`relative overflow-hidden mt-6 inline-flex items-center justify-center min-h-[48px] px-8 py-3 rounded-xl bg-white text-slate-950 font-semibold text-base shadow-xl shadow-black/50 active:scale-[0.97] transition-all duration-300 ease-out hover:bg-slate-100 touch-manipulation select-none ${
             buttonShimmer ? 'ring-2 ring-white/60 ring-offset-2 ring-offset-black scale-[1.02]' : ''
           }`}
         >
