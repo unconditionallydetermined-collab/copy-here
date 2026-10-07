@@ -2,23 +2,21 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { Lightbulb, Code2 } from 'lucide-react'
 import { Github, Linkedin } from '../components/Icons'
+import WaterRippleCanvas from '../components/WaterRippleCanvas'
 
-// TODO: Replace placeholder percentages with verified sourced figures
 const PLATFORM_CONFIG = {
   github: {
     id: 'github',
     name: 'GitHub',
     label: 'GitHub',
-    statTemplate: '{percent}% of companies hire through GitHub',
     targetPercent: 84,
-    color: '#24292F',
+    color: '#F8FAFC',
     icon: Github,
   },
   leetcode: {
     id: 'leetcode',
     name: 'LeetCode',
     label: 'LeetCode',
-    statTemplate: '{percent}% of companies hire through LeetCode',
     targetPercent: 78,
     color: '#FFA116',
     icon: Code2,
@@ -27,18 +25,16 @@ const PLATFORM_CONFIG = {
     id: 'linkedin',
     name: 'LinkedIn',
     label: 'LinkedIn',
-    statTemplate: '{percent}% of companies hire through LinkedIn',
     targetPercent: 92,
-    color: '#0A66C2',
+    color: '#38BDF8',
     icon: Linkedin,
   },
   skills: {
     id: 'skills',
     name: 'Skills',
     label: 'Skills',
-    statTemplate: '{percent}% of companies hire through skills',
     targetPercent: 96,
-    color: '#EAB308',
+    color: '#FACC15',
     icon: Lightbulb,
   },
 }
@@ -72,7 +68,6 @@ export default function LandingPage() {
   const stageLockRef = useRef(false)
   const animationFrameRef = useRef(null)
   const countIntervalRef = useRef(null)
-  const headlineRef = useRef(null)
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -98,7 +93,7 @@ export default function LandingPage() {
   useEffect(() => {
     if (reducedMotion) return
     let lastTime = performance.now()
-    const speed = 0.055 / DEBUG_SLOWMO // degrees per ms
+    const speed = 0.055 / DEBUG_SLOWMO
 
     const tick = (now) => {
       const delta = now - lastTime
@@ -121,7 +116,7 @@ export default function LandingPage() {
     return () => cancelAnimationFrame(animationFrameRef.current)
   }, [reducedMotion, orbiting])
 
-  // Scheduler logic with semaphore
+  // Scheduler logic
   useEffect(() => {
     if (reducedMotion) {
       setActiveStageId('skills')
@@ -135,7 +130,6 @@ export default function LandingPage() {
     const popNext = () => {
       if (!active || stageLockRef.current || document.visibilityState !== 'visible') return
 
-      // Find next candidate reaching near 2 o'clock (60 deg)
       const candidates = BADGES.filter((b) => orbiting[b] && b !== lastPoppedRef.current)
       if (candidates.length === 0) return
 
@@ -152,21 +146,18 @@ export default function LandingPage() {
       stageLockRef.current = true
       lastPoppedRef.current = closest
 
-      // Knock out current
       if (activeStageId) {
         setExitingStageId(activeStageId)
         setTimeout(() => {
           setOrbiting((prev) => ({ ...prev, [activeStageId]: true }))
-          anglesRef.current[activeStageId] = 240 // re-enter at 8 o'clock
+          anglesRef.current[activeStageId] = 240
           setExitingStageId(null)
         }, 220 * DEBUG_SLOWMO)
       }
 
-      // Detach from orbit & place into stage
       setOrbiting((prev) => ({ ...prev, [closest]: false }))
       setActiveStageId(closest)
 
-      // Count up ticker
       const target = PLATFORM_CONFIG[closest].targetPercent
       let current = 0
       setDisplayCount(0)
@@ -182,7 +173,6 @@ export default function LandingPage() {
         }
       }, stepTime)
 
-      // Unlock after transition + random cooldown (5s to 11s)
       const cooldown = Math.floor(5000 + Math.random() * 6000) * DEBUG_SLOWMO
       timer = setTimeout(() => {
         stageLockRef.current = false
@@ -205,19 +195,25 @@ export default function LandingPage() {
 
   return (
     <main
-      className="relative w-screen h-[100dvh] overflow-hidden bg-white text-slate-900 flex flex-col items-center justify-center select-none font-sans"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      className="relative w-screen min-h-[100svh] h-[100dvh] overflow-hidden bg-[#0a0a0a] text-white flex flex-col items-center justify-center select-none font-sans"
+      style={{
+        paddingTop: 'env(safe-area-inset-top, 0px)',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+      }}
     >
+      {/* ── Interactive Water Ripple Surface Canvas ── */}
+      <WaterRippleCanvas className="z-0" />
+
       {/* ── Ambient Orbit Ring ── */}
       <div
-        className="relative flex items-center justify-center pointer-events-none"
+        className="relative z-10 flex items-center justify-center pointer-events-none"
         style={{ width: badgeRadius * 2 + 100, height: badgeRadius * 2 + 100 }}
       >
         {!reducedMotion &&
           BADGES.map((id) => {
             const isOrbiting = orbiting[id]
             const deg = angles[id] || 0
-            const rad = ((deg - 90) * Math.PI) / 180 // 12 o'clock = top (0 deg)
+            const rad = ((deg - 90) * Math.PI) / 180
             const x = Math.cos(rad) * badgeRadius
             const y = Math.sin(rad) * badgeRadius
             const cfg = PLATFORM_CONFIG[id]
@@ -229,7 +225,7 @@ export default function LandingPage() {
               <div
                 key={id}
                 aria-label={cfg.name}
-                className="absolute w-12 h-12 rounded-full bg-white shadow-md border border-slate-100 flex items-center justify-center will-change-transform transition-opacity"
+                className="absolute w-12 h-12 rounded-full bg-slate-900/80 backdrop-blur-md shadow-xl border border-white/10 flex items-center justify-center will-change-transform transition-opacity"
                 style={{
                   transform: `translate3d(${x}px, ${y}px, 0)`,
                   transitionDuration: `${120 * DEBUG_SLOWMO}ms`,
@@ -241,20 +237,16 @@ export default function LandingPage() {
           })}
 
         {/* ── Center Stage & Headline ── */}
-        <div
-          ref={headlineRef}
-          className="relative z-10 flex flex-col items-center text-center max-w-sm px-4 pointer-events-auto"
-        >
-          <h1 className="text-[clamp(28px,6vmin,54px)] font-extrabold tracking-tight text-slate-900 leading-tight">
+        <div className="relative z-10 flex flex-col items-center text-center max-w-sm px-4 pointer-events-auto">
+          <h1 className="text-[clamp(28px,6vmin,54px)] font-extrabold tracking-tight text-white leading-tight drop-shadow-md">
             Do you have
           </h1>
 
           {/* Reserved Stage Slot */}
           <div className="h-16 w-16 my-3 flex items-center justify-center relative">
-            {/* Exiting occupant (knock-out) */}
             {exitingConfig && (
               <div
-                className="absolute w-14 h-14 rounded-full bg-white shadow-lg border border-slate-100 flex items-center justify-center transition-all"
+                className="absolute w-14 h-14 rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/20 flex items-center justify-center transition-all"
                 style={{
                   transform: 'translateY(55px) scale(0.92, 1.1)',
                   opacity: 0,
@@ -266,10 +258,9 @@ export default function LandingPage() {
               </div>
             )}
 
-            {/* Active occupant (pop-in) */}
             {activeConfig ? (
               <div
-                className="w-14 h-14 rounded-full bg-white shadow-lg border border-slate-100 flex items-center justify-center transition-transform"
+                className="w-14 h-14 rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/20 flex items-center justify-center transition-transform"
                 style={{
                   transform: 'scale(1)',
                   transitionDuration: `${260 * DEBUG_SLOWMO}ms`,
@@ -279,11 +270,11 @@ export default function LandingPage() {
                 {React.createElement(activeConfig.icon, { size: 26, color: activeConfig.color })}
               </div>
             ) : (
-              <div className="w-14 h-14 rounded-full border-2 border-dashed border-slate-200" />
+              <div className="w-14 h-14 rounded-full border-2 border-dashed border-slate-700" />
             )}
           </div>
 
-          {/* Stage Label & Stat (Reserved height to prevent layout shift) */}
+          {/* Stage Label & Stat */}
           <div aria-live="polite" className="h-14 flex flex-col items-center justify-center">
             {activeConfig ? (
               <div
@@ -295,22 +286,22 @@ export default function LandingPage() {
                 <span className="text-xs uppercase font-bold tracking-wider text-slate-400">
                   {activeConfig.label}
                 </span>
-                <p className="text-[clamp(14px,2.2vmin,18px)] font-medium text-slate-700 mt-0.5">
-                  <span className="font-bold text-slate-900 tabular-nums">
+                <p className="text-[clamp(14px,2.2vmin,18px)] font-medium text-slate-300 mt-0.5">
+                  <span className="font-bold text-white tabular-nums">
                     {displayCount}%
                   </span>{' '}
                   of companies hire through {activeConfig.label.toLowerCase()}
                 </p>
               </div>
             ) : (
-              <span className="text-xs text-slate-300 font-medium">Waiting for credentials...</span>
+              <span className="text-xs text-slate-500 font-medium">Waiting for credentials...</span>
             )}
           </div>
 
-          {/* Call to action button */}
+          {/* Call to action button with native active feedback & touch-manipulation */}
           <Link
             to="/auth"
-            className="mt-6 inline-flex items-center justify-center min-h-[48px] px-8 py-3 rounded-xl bg-slate-900 text-white font-semibold text-base shadow-lg shadow-slate-900/10 active:scale-[0.97] transition-transform duration-150 ease-out hover:bg-slate-800"
+            className="mt-6 inline-flex items-center justify-center min-h-[48px] px-8 py-3 rounded-xl bg-white text-slate-950 font-semibold text-base shadow-xl shadow-black/50 active:scale-[0.97] transition-all duration-150 ease-out hover:bg-slate-100 touch-manipulation select-none"
           >
             Get a job
           </Link>
