@@ -38,15 +38,15 @@ export default function Sidebar({ onClose }) {
   )
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="internal-sidebar-content flex flex-col h-full">
       {/* Logo */}
-      <div className="flex items-center justify-between p-5 border-b border-slate-100">
+      <div className="internal-brand flex items-center justify-between p-5 border-b">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+          <div className="internal-brand-mark w-8 h-8 rounded-lg flex items-center justify-center">
             <TrendingUp size={18} className="text-white" />
           </div>
           <div>
-            <span className="font-bold text-slate-900 text-sm tracking-tight">Career Sync</span>
+            <span className="font-bold text-sm tracking-tight internal-brand-name">Career Sync</span>
             <span className="badge badge-blue ml-2 text-[10px]">AI</span>
           </div>
         </div>
@@ -58,18 +58,14 @@ export default function Sidebar({ onClose }) {
       </div>
 
       {/* Nav links */}
-      <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+      <nav className="internal-nav flex-1 p-3 space-y-0.5 overflow-y-auto">
         {navItems.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
             to={to}
             onClick={onClose}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${
-                isActive
-                  ? 'bg-blue-50 text-blue-600 font-semibold shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-              }`
+              `internal-nav-link flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${isActive ? 'is-active' : ''}`
             }
           >
             <Icon size={16} />
@@ -96,14 +92,14 @@ export default function Sidebar({ onClose }) {
       </nav>
 
       {/* User profile & sign out */}
-      <div className="p-3 border-t border-slate-100">
-        <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50">
+      <div className="internal-account p-3 border-t">
+        <div className="internal-account-card flex items-center justify-between p-2 rounded-xl">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-semibold text-xs shrink-0">
+            <div className="internal-avatar w-8 h-8 rounded-lg text-white flex items-center justify-center font-semibold text-xs shrink-0">
               {user?.email?.[0]?.toUpperCase() || 'U'}
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-semibold text-slate-800 truncate">
+              <p className="text-xs font-semibold internal-account-name truncate">
                 {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User'}
               </p>
               <p className="text-[10px] text-slate-400 truncate">{user?.email}</p>

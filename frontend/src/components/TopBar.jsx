@@ -21,21 +21,21 @@ export default function TopBar({ onMenuClick }) {
   const page = pageTitles[pathname] || { title: 'Career Sync', subtitle: '' }
 
   return (
-    <header className="apple-glass border-b border-slate-200/50 px-6 py-3.5 flex items-center justify-between sticky top-0 z-10 safe-top">
+    <header className="internal-topbar apple-glass px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-10 safe-top">
       <div className="flex items-center gap-4">
         <button
           onClick={onMenuClick}
-          className="lg:hidden p-2 rounded-lg hover:bg-slate-100 text-slate-600"
+          className="internal-menu-button lg:hidden rounded-xl text-slate-600" aria-label="Open navigation"
         >
           <Menu size={20} />
         </button>
         <div>
-          <h1 className="text-[15px] font-semibold text-slate-900">{page.title}</h1>
-          {page.subtitle && <p className="text-[12px] text-slate-500">{page.subtitle}</p>}
+          <h1 className="text-base sm:text-[15px] font-semibold text-slate-900">{page.title}</h1>
+          {page.subtitle && <p className="hidden sm:block text-[12px] text-slate-500">{page.subtitle}</p>}
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <button className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 relative">
+        <button className="internal-menu-button rounded-xl hover:bg-slate-100 text-slate-500 relative" aria-label="Notifications">
           <Bell size={18} />
         </button>
       </div>

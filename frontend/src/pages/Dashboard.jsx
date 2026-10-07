@@ -77,15 +77,15 @@ export default function Dashboard() {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Welcome */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-6 text-white">
+      <div className="dashboard-welcome rounded-2xl p-5 sm:p-6 text-white">
         <h2 className="text-xl font-bold mb-1">
           Welcome back{profile?.name ? `, ${profile.name}` : ''}! 👋
         </h2>
-        <p className="text-blue-100 text-sm mb-4">
+        <p className="text-slate-300 text-sm mb-4">
           {profile?.targetRole ? `Targeting: ${profile.targetRole}` : 'Set your target role to get personalized guidance.'}
         </p>
         <div className="flex items-center gap-3">
-          <div className="flex-1 bg-white/20 rounded-full h-2">
+          <div className="flex-1 bg-white/15 rounded-full h-2">
             <div
               className="bg-white h-2 rounded-full transition-all duration-700"
               style={{ width: `${completionScore}%` }}
