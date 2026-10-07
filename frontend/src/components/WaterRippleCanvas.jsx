@@ -10,6 +10,8 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
   const wavesRef = useRef([])
   const hoverLightsRef = useRef([])
   const glowDimRef = useRef(1.0)
+  const wakePointsRef = useRef([])
+  const lastWakeStampRef = useRef(0)
   const onSlamRef = useRef(onSlam)
   const boostUntilRef = useRef(0)
   const protectedRectRef = useRef(null)
@@ -197,6 +199,49 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
       const dimFactor = glowDimRef.current
       const protRect = protectedRectRef.current
 
+      // Maintain trailing water wake stamps from moving orbs (skimming stone effect)
+      const wakePoints = wakePointsRef.current
+      if (now - lastWakeStampRef.current >= 28) {
+        lastWakeStampRef.current = now
+        for (let l = 0; l < lights.length; l++) {
+          const light = lights[l]
+          if (light.moving) {
+            wakePoints.push({
+              x: light.x,
+              y: light.y,
+              birth: now,
+              maxAge: 700,
+            })
+          }
+        }
+      }
+
+      // Purge old wake stamps
+      for (let i = wakePoints.length - 1; i >= 0; i--) {
+        if (now - wakePoints[i].birth > wakePoints[i].maxAge) {
+          wakePoints.splice(i, 1)
+        }
+      }
+
+      // Gentle fluid skim displacement from moving orbs (water skimming stone that never sinks)
+      for (let l = 0; l < lights.length; l++) {
+        const light = lights[l]
+        if (!light.moving) continue
+        const skimRadius = 45
+        for (let j = 0; j < dots.length; j++) {
+          const dot = dots[j]
+          const dx = dot.ox - light.x
+          const dy = dot.oy - light.y
+          const dSq = dx * dx + dy * dy
+          if (dSq < skimRadius * skimRadius && dSq > 1) {
+            const d = Math.sqrt(dSq)
+            const push = (1 - d / skimRadius) * 22 * dt
+            dot.vx += (dx / d) * push
+            dot.vy += (dy / d) * push
+          }
+        }
+      }
+
       // Active damping with temporary boost on impact
       const isDampingBoosted = now < boostUntilRef.current
       const currentC = isDampingBoosted ? BASE_C * 2.1 : BASE_C
@@ -268,8 +313,9 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
       ctx.fillRect(0, 0, width, height)
 
       // 30% larger glow radius under orbs (17 -> 22px)
-      const LIGHT_RADIUS = 22
-      const LIGHT_RADIUS_SQ = LIGHT_RADIUS * LIGHT_RADIUS
+      const ACTIVE_ORB_LIGHT_RADIUS = 48
+      const ACTIVE_ORB_LIGHT_RADIUS_SQ = ACTIVE_ORB_LIGHT_RADIUS * ACTIVE_ORB_LIGHT_RADIUS
+      const EDGE_FADE_MARGIN = 140
 
       for (let i = 0; i < dots.length; i++) {
         const dot = dots[i]
@@ -277,17 +323,34 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
         const dy = dot.y - dot.oy
         const disp = Math.sqrt(dx * dx + dy * dy)
 
-        // Wave excitation capped
-        let energy = Math.min(1, disp / 8)
+        // Wave displacement excitation
+        let energy = Math.min(1, disp / 7)
 
-        // Single soft light-up under floating icons (no extra wake)
+        // Dynamic fluid glow under currently passing orbs
         for (let l = 0; l < lights.length; l++) {
           const lx = lights[l].x - dot.ox
           const ly = lights[l].y - dot.oy
           const lDistSq = lx * lx + ly * ly
-          if (lDistSq < LIGHT_RADIUS_SQ) {
-            const lFactor = 1 - Math.sqrt(lDistSq) / LIGHT_RADIUS
-            energy = Math.max(energy, lFactor * 0.6 * dimFactor)
+          if (lDistSq < ACTIVE_ORB_LIGHT_RADIUS_SQ) {
+            const lFactor = 1 - Math.sqrt(lDistSq) / ACTIVE_ORB_LIGHT_RADIUS
+            const orbGlow = lFactor * 0.75 * dimFactor
+            energy = Math.max(energy, orbGlow)
+          }
+        }
+
+        // Skimming water wake: glowing trail lingering behind moving orbs
+        for (let w = 0; w < wakePoints.length; w++) {
+          const wp = wakePoints[w]
+          const wx = wp.x - dot.ox
+          const wy = wp.y - dot.oy
+          const wDistSq = wx * wx + wy * wy
+          const wakeRadius = 40
+          if (wDistSq < wakeRadius * wakeRadius) {
+            const wakeAgeNorm = (now - wp.birth) / wp.maxAge
+            const timeFade = Math.pow(1 - wakeAgeNorm, 1.6)
+            const spatialFade = 1 - Math.sqrt(wDistSq) / wakeRadius
+            const wakeGlow = spatialFade * timeFade * 0.55 * dimFactor
+            energy = Math.max(energy, wakeGlow)
           }
         }
 
@@ -303,14 +366,24 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
           }
         }
 
-        // Enlarged luminous fluid particle dots with stronger energy response
-        const alpha = Math.min(0.92, 0.42 + 0.50 * energy)
-        const radius = BASE_DOT_RADIUS + 0.85 * energy
+        // Edge vignette: smooth brightness falloff near screen borders
+        const distFromLeft = dot.ox
+        const distFromRight = width - dot.ox
+        const distFromTop = dot.oy
+        const distFromBottom = height - dot.oy
+        const minEdgeDist = Math.min(distFromLeft, distFromRight, distFromTop, distFromBottom)
+        const edgeFactor = Math.min(1, Math.max(0.06, minEdgeDist / EDGE_FADE_MARGIN))
+        const easedEdge = 0.5 - 0.5 * Math.cos(edgeFactor * Math.PI)
+
+        // Dynamic radius and luminous fluid particle coloring with edge attenuation
+        const baseAlpha = Math.min(0.92, 0.40 + 0.52 * energy)
+        const alpha = baseAlpha * easedEdge
+        const radius = (BASE_DOT_RADIUS + 0.85 * energy) * Math.max(0.7, easedEdge)
 
         ctx.fillStyle =
           energy > 0.06
             ? `rgba(${Math.round(215 + 40 * energy)}, ${Math.round(225 + 30 * energy)}, 255, ${alpha.toFixed(3)})`
-            : 'rgba(185, 195, 210, 0.42)'
+            : `rgba(185, 195, 210, ${(0.38 * easedEdge).toFixed(3)})`
 
         ctx.beginPath()
         ctx.arc(dot.x, dot.y, radius, 0, Math.PI * 2)
