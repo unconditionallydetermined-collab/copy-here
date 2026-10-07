@@ -68,6 +68,7 @@ function AppRoutes() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/downloads" element={<DownloadsPage />} />
+        <Route path="/download" element={<DownloadsPage />} />
         <Route path="/auth" element={<PublicRoute><AuthPage /></PublicRoute>} />
 
         <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
