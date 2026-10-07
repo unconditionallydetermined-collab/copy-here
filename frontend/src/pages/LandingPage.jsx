@@ -47,9 +47,9 @@ const BADGES = ['github', 'leetcode', 'linkedin', 'skills']
 const DEBUG_SLOWMO = 1
 
 export default function LandingPage() {
-  const [activeStageId, setActiveStageId] = useState(null)
+  const [activeStageId, setActiveStageId] = useState('github')
   const [exitingStageId, setExitingStageId] = useState(null)
-  const [displayCount, setDisplayCount] = useState(0)
+  const [displayCount, setDisplayCount] = useState(PLATFORM_CONFIG.github.targetPercent)
   const [reducedMotion, setReducedMotion] = useState(false)
   const [badgeRadius, setBadgeRadius] = useState(200)
 
@@ -62,13 +62,13 @@ export default function LandingPage() {
 
   const [angles, setAngles] = useState(anglesRef.current)
   const [orbiting, setOrbiting] = useState({
-    github: true,
+    github: false,
     leetcode: true,
     linkedin: true,
     skills: true,
   })
 
-  const lastPoppedRef = useRef(null)
+  const lastPoppedRef = useRef('github')
   const stageLockRef = useRef(false)
   const animationFrameRef = useRef(null)
   const countIntervalRef = useRef(null)

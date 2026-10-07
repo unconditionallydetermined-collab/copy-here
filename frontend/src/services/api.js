@@ -67,7 +67,7 @@ export const certificatesApi = {
 // Resume
 export const resumeApi = {
   get: () => api.get('/resume'),
-  upload: (formData) => api.post('/resume/upload', formData),
+  upload: (formData) => api.post('/resume/upload', formData, { timeout: 60000 }),
 }
 
 // Jobs

@@ -697,3 +697,13 @@ a:not(:disabled):active,
     -webkit-backdrop-filter: none !important;
   }
 }
+
+@keyframes slam {
+  0% { transform: scale(1.75); opacity: 0; filter: blur(4px); }
+  60% { transform: scale(0.92); opacity: 1; filter: blur(0); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-slam {
+  animation: slam 350ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

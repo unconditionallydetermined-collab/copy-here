@@ -48,29 +48,63 @@ export default function ResumePage() {
   const onDrop = useCallback(async (files) => {
     const file = files[0]
     if (!file) return
-    if (!file.name.match(/\.(pdf|doc|docx|txt)$/i)) {
-      toast.error('Please upload a PDF, Word document, or text file')
+    if (!file.name.match(/\.(pdf|docx|txt)$/i)) {
+      toast.error('Only PDF, DOCX or TXT files are supported')
       return
     }
     setUploading(true)
+    const toastId = toast.loading('Uploading... server may take a moment to wake up')
     const formData = new FormData()
     formData.append('file', file)
     try {
       const { data } = await resumeApi.upload(formData)
       setResume(data)
-      setAnalysis(null) // Reset previous analysis on new resume upload
-      toast.success('Resume uploaded successfully!')
+      setAnalysis(null)
+      toast.success('Resume uploaded successfully!', { id: toastId })
     } catch (err) {
-      const errorMsg = err.response?.data?.message || (typeof err.response?.data === 'string' ? err.response.data : null) || 'Failed to upload resume'
-      toast.error(errorMsg)
+      let errorMsg = 'Failed to upload resume'
+      if (!err.response) {
+        errorMsg = "Can't reach the server. It may be waking up, so try again in 30 seconds."
+      } else if (err.response.status === 401) {
+        errorMsg = 'Session expired, please sign in again.'
+      } else if (err.response.status === 413) {
+        errorMsg = 'File too large (max 10 MB).'
+      } else if (err.response.data?.message) {
+        errorMsg = err.response.data.message
+      } else if (typeof err.response.data === 'string') {
+        errorMsg = err.response.data
+      }
+      toast.error(errorMsg, { id: toastId })
     } finally {
       setUploading(false)
     }
   }, [])
 
+  const onDropRejected = useCallback((fileRejections) => {
+    const rejection = fileRejections[0]
+    if (!rejection) return
+    const error = rejection.errors[0]
+    if (error?.code === 'file-too-large') {
+      toast.error('File is larger than 10 MB')
+    } else if (error?.code === 'file-invalid-type') {
+      toast.error('Only PDF, DOCX or TXT files are supported')
+    } else if (error?.code === 'too-many-files') {
+      toast.error('Upload one file at a time')
+    } else {
+      toast.error(error?.message || 'Rejected file')
+    }
+  }, [])
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop, accept: { 'application/pdf': ['.pdf'], 'application/msword': ['.doc', '.docx'], 'text/plain': ['.txt'] },
-    maxFiles: 1, maxSize: 10 * 1024 * 1024
+    onDrop,
+    onDropRejected,
+    accept: {
+      'application/pdf': ['.pdf'],
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+      'text/plain': ['.txt'],
+    },
+    maxFiles: 1,
+    maxSize: 10 * 1024 * 1024
   })
 
   const handleAnalyze = async () => {
@@ -132,7 +166,7 @@ export default function ResumePage() {
                   <p className="text-sm font-semibold text-slate-700">
                     {isDragActive ? 'Drop your resume here' : 'Drag & drop or click to upload'}
                   </p>
-                  <p className="text-xs text-slate-400 mt-1">PDF, DOC, DOCX up to 10MB</p>
+                  <p className="text-xs text-slate-400 mt-1">PDF, DOCX, TXT up to 10MB</p>
                 </div>
               </div>
             )}

@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -44,14 +45,22 @@ public class ResumeController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<?> handleMaxSizeException(MaxUploadSizeExceededException exc) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(Map.of("message", "File too large (max 10 MB)"));
+    }
+
     @PostMapping("/upload")
     public ResponseEntity<?> upload(@AuthenticationPrincipal UserPrincipal p,
                                     @RequestParam("file") MultipartFile file) {
         if (p == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User is not authenticated");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("message", "User is not authenticated"));
         }
         if (file == null || file.isEmpty()) {
-            return ResponseEntity.badRequest().body("Please select a file to upload");
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", "Please select a file to upload"));
         }
 
         try {
@@ -60,21 +69,32 @@ public class ResumeController {
                     ? Paths.get(originalFilename).getFileName().toString()
                     : "resume.pdf";
 
-            // Extract text fully in-memory (no disk writes — safe for Render's ephemeral filesystem)
             String extractedText = extractTextInMemory(file, cleanName);
+
+            if (extractedText == null || extractedText.trim().isEmpty()) {
+                if (cleanName.toLowerCase().endsWith(".pdf")) {
+                    return ResponseEntity.badRequest()
+                            .body(Map.of("message", "This PDF looks scanned, so upload a text-based PDF"));
+                } else {
+                    return ResponseEntity.badRequest()
+                            .body(Map.of("message", "No readable text found in file"));
+                }
+            }
+
             List<String> skills = extractSkills(extractedText);
 
             Resume resume = new Resume();
             resume.setUserId(p.getUserId());
             resume.setFileName(cleanName);
-            resume.setFileUrl(null); // No disk storage on cloud
+            resume.setFileUrl(null);
             resume.setExtractedText(extractedText);
             resume.setExtractedSkills(skills);
             resume.setUploadedAt(LocalDateTime.now());
 
             return ResponseEntity.ok(resumeRepository.save(resume));
         } catch (IOException e) {
-            return ResponseEntity.badRequest().body("Failed to upload resume: " + e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", "Failed to upload resume: " + e.getMessage()));
         }
     }
 
