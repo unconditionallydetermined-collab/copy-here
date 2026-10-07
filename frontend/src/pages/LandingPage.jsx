@@ -99,7 +99,7 @@ export default function LandingPage() {
     exclusionRect: { left: 0, top: 0, right: 0, bottom: 0 },
     rx: 240,
     ry: 240,
-    iconRadius: 24,
+    iconRadius: 36,
     pad: 28,
   })
 
@@ -176,8 +176,8 @@ export default function LandingPage() {
         slotRect = slotEl.getBoundingClientRect()
       }
 
-      const iconRadius = vw < 360 ? 16 : vw < 480 ? 20 : 24
-      const pad = vw < 360 ? 12 : vw < 480 ? 20 : 28
+      const iconRadius = vw < 360 ? 24 : vw < 480 ? 30 : 36
+      const pad = vw < 360 ? 16 : vw < 480 ? 24 : 32
 
       const heroCenterX = heroRect.left + heroRect.width / 2
       const heroCenterY = heroRect.top + heroRect.height / 2
@@ -748,12 +748,13 @@ export default function LandingPage() {
                 style={{
                   left: '50%',
                   top: '50%',
-                  marginLeft: '-24px',
-                  marginTop: '-24px',
+                  marginLeft: '-36px',
+                  marginTop: '-36px',
+                  boxShadow: `0 0 24px ${cfg.color}66, 0 0 52px ${cfg.color}33, 0 12px 30px rgba(0,0,0,0.6)`,
                 }}
-                className="absolute w-12 h-12 rounded-full bg-slate-900/80 backdrop-blur-xl shadow-2xl border border-white/20 flex items-center justify-center pointer-events-auto cursor-pointer will-change-transform active:scale-[0.92]"
+                className="absolute w-[72px] h-[72px] rounded-full bg-slate-900/85 backdrop-blur-xl shadow-2xl border border-white/25 flex items-center justify-center pointer-events-auto cursor-pointer will-change-transform active:scale-[0.92]"
               >
-                <Icon size={22} color={cfg.color} />
+                <Icon size={34} color={cfg.color} />
               </button>
             )
           })}
@@ -768,7 +769,7 @@ export default function LandingPage() {
           Do you have
         </h1>
 
-        <div ref={centerSlotRef} className="h-16 w-16 my-3 flex items-center justify-center relative">
+        <div ref={centerSlotRef} className="h-24 w-24 my-3 flex items-center justify-center relative">
           {/* Slot landing pulse ring */}
           {pulseRingActive && (
             <div
@@ -780,17 +781,25 @@ export default function LandingPage() {
           {/* Outgoing center icon fading in-place quietly */}
           {exitingConfig && (
             <div
-              style={{ opacity: exitingOpacity }}
-              className="absolute w-14 h-14 rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/20 flex items-center justify-center pointer-events-none"
+              style={{
+                opacity: exitingOpacity,
+                boxShadow: `0 0 35px ${exitingConfig.color}88, 0 0 75px ${exitingConfig.color}44, 0 15px 35px rgba(0,0,0,0.6)`,
+              }}
+              className="absolute w-[84px] h-[84px] rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/25 flex items-center justify-center pointer-events-none"
             >
-              {React.createElement(exitingConfig.icon, { size: 26, color: exitingConfig.color })}
+              {React.createElement(exitingConfig.icon, { size: 38, color: exitingConfig.color })}
             </div>
           )}
 
-          {/* Active Center Icon */}
+          {/* Active Center Icon with prominent colored orb glow */}
           {activeConfig ? (
-            <div className="w-14 h-14 rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/20 flex items-center justify-center">
-              {React.createElement(activeConfig.icon, { size: 26, color: activeConfig.color })}
+            <div
+              style={{
+                boxShadow: `0 0 35px ${activeConfig.color}88, 0 0 75px ${activeConfig.color}44, 0 15px 35px rgba(0,0,0,0.6)`,
+              }}
+              className="w-[84px] h-[84px] rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/25 flex items-center justify-center"
+            >
+              {React.createElement(activeConfig.icon, { size: 38, color: activeConfig.color })}
             </div>
           ) : (
             <div className="w-14 h-14 rounded-full border-2 border-dashed border-slate-700" />

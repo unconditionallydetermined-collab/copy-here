@@ -285,7 +285,7 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
           const lDistSq = lx * lx + ly * ly
           if (lDistSq < LIGHT_RADIUS_SQ) {
             const lFactor = 1 - Math.sqrt(lDistSq) / LIGHT_RADIUS
-            energy = Math.max(energy, lFactor * 0.4 * dimFactor)
+            energy = Math.max(energy, lFactor * 0.6 * dimFactor)
           }
         }
 
