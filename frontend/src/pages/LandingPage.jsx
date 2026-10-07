@@ -144,6 +144,8 @@ export default function LandingPage() {
   const [centerCoords, setCenterCoords] = useState({ x: 0, y: 0 })
 
   const heroWrapperRef = useRef(null)
+  const headingRef = useRef(null)
+  const captionRef = useRef(null)
   const centerSlotRef = useRef(null)
   const buttonRef = useRef(null)
   const signInRef = useRef(null)
@@ -163,6 +165,7 @@ export default function LandingPage() {
     isParked: false,
     width: 0,
     height: 0,
+    contentBoxes: [],
   })
 
   // State machine & animation refs
@@ -239,22 +242,65 @@ export default function LandingPage() {
 
     setCenterCoords({ x: slotCenterX, y: slotCenterY })
 
-    // Viewport bounds: guarantee orbs never clip outside the screen
-    const maxHorizontalR = (vw / 2) - iconRadius - (isMobile ? 12 : 24)
-    const maxVerticalR = Math.min(
-      slotCenterY - iconRadius - 20,
-      (vh - slotCenterY) - iconRadius - (isMobile ? 70 : 90)
-    )
-    const maxSafeR = Math.max(90, Math.min(maxHorizontalR, maxVerticalR))
+    // Measure the real content boxes so orbs can avoid (and, when the
+    // viewport cannot fit a clear orbit, ghost over) text and buttons.
+    const boxOf = (el) => {
+      if (!el) return null
+      const r = el.getBoundingClientRect()
+      return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }
+    }
+    const contentBoxes = [
+      boxOf(headingRef.current),
+      boxOf(captionRef.current),
+      boxOf(buttonRef.current),
+      boxOf(signInRef.current),
+      boxOf(ticksRef.current),
+    ].filter(Boolean)
+
+    // Union of all content, used as the no-overlap target
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    for (const b of contentBoxes) {
+      minX = Math.min(minX, b.left); minY = Math.min(minY, b.top)
+      maxX = Math.max(maxX, b.right); maxY = Math.max(maxY, b.bottom)
+    }
+    if (!contentBoxes.length) {
+      minX = slotCenterX - 40; minY = slotCenterY - 40
+      maxX = slotCenterX + 40; maxY = slotCenterY + 40
+    }
 
     const slotRadius = 33
     const minClearR = slotRadius + iconRadius + pad + 20
 
-    const preferredR = isMobile
-      ? Math.max(minClearR, Math.min(maxSafeR, vw * 0.38))
-      : Math.max(220, Math.min(vw * 0.42, vh * 0.40, 320))
+    // Smallest circle centered on the center icon that stays outside the
+    // whole content union (checked at the union corners, the worst case).
+    const corners = [
+      [minX - pad, minY - pad], [maxX + pad, minY - pad],
+      [minX - pad, maxY + pad], [maxX + pad, maxY + pad],
+    ]
+    let maxCornerDist = 0
+    for (const [cx, cy] of corners) {
+      maxCornerDist = Math.max(maxCornerDist, Math.hypot(cx - slotCenterX, cy - slotCenterY))
+    }
+    const requiredR = maxCornerDist + iconRadius + 4
 
-    const R = Math.max(minClearR, Math.min(preferredR, maxSafeR))
+    // Largest circle centered on the center icon that stays fully on screen
+    const edgeMargin = isMobile ? 8 : 24
+    const maxFitR = Math.min(
+      slotCenterX, vw - slotCenterX,
+      slotCenterY, vh - slotCenterY
+    ) - iconRadius - edgeMargin
+
+    // Prefer a fully-clearing circle; fall back to the largest on-screen
+    // circle (orb ghosting covers the residual overlap on short screens).
+    let R
+    if (requiredR <= maxFitR && requiredR >= minClearR) {
+      R = requiredR
+    } else {
+      const preferredR = isMobile
+        ? Math.max(minClearR, Math.min(maxFitR, vw * 0.38))
+        : Math.max(220, Math.min(vw * 0.42, vh * 0.40, 320))
+      R = Math.max(minClearR, Math.min(preferredR, maxFitR))
+    }
 
     const exclusionRect = {
       left: slotCenterX - slotRadius - pad,
@@ -273,6 +319,7 @@ export default function LandingPage() {
       isParked: false,
       width: vw,
       height: vh,
+      contentBoxes,
     }
 
     if (rippleRef.current?.setProtectedRect) {
@@ -684,11 +731,28 @@ export default function LandingPage() {
 
         // Bottom edge gradient: keep orbs visible across entire orbit, fade only right at footer
         const screenY = geom.slotCenterY + p.y
+        const screenX = geom.slotCenterX + p.x
         const distFromBottom = geom.height - screenY
         const BOTTOM_FADE_MARGIN = Math.min(80, geom.height * 0.12)
         const bottomFactor = Math.min(1, Math.max(0, distFromBottom / BOTTOM_FADE_MARGIN))
         const bottomGradient = 0.5 - 0.5 * Math.cos(bottomFactor * Math.PI)
-        const effectiveOpacity = p.opacity * Math.max(0.35, bottomGradient)
+
+        // Ghost over content: when the viewport cannot fit a fully-clearing
+        // orbit (narrow phones), orbs that cross a content box fade to a
+        // whisper so overlap stays minimal. Returning orbs in SETTLE are
+        // exempt so the replacement stays visible.
+        let ghost = false
+        if (!(isReturning && state.phase === 'SETTLE')) {
+          const orbR = geom.iconRadius + 2
+          for (const b of geom.contentBoxes) {
+            if (
+              screenX + orbR > b.left && screenX - orbR < b.right &&
+              screenY + orbR > b.top && screenY - orbR < b.bottom
+            ) { ghost = true; break }
+          }
+        }
+        const ghostFactor = ghost ? 0.3 : 1
+        const effectiveOpacity = p.opacity * Math.max(0.35, bottomGradient) * ghostFactor
 
         // Glow breathing (0.8 to 1.0 intensity)
         const d = DRIFT_CONFIG[id] || DRIFT_CONFIG.github
@@ -699,7 +763,7 @@ export default function LandingPage() {
         el.style.transform = `translate3d(${p.x.toFixed(2)}px, ${p.y.toFixed(2)}px, 0) scale(${sc.toFixed(3)})`
         el.style.opacity = `${effectiveOpacity.toFixed(3)}`
 
-        if (effectiveOpacity > 0.08) {
+        if (effectiveOpacity > 0.08 && !ghost) {
           hoverLights.push({
             x: geom.slotCenterX + p.x,
             y: geom.slotCenterY + p.y,
@@ -796,7 +860,7 @@ export default function LandingPage() {
         className="relative z-20 flex flex-col items-center text-center max-w-sm px-4 pointer-events-auto"
       >
         {/* 1. Randomized One-liner Heading */}
-        <div className="w-full max-w-[680px] min-h-[4.5rem] sm:min-h-[5.5rem] flex items-center justify-center text-center">
+        <div ref={headingRef} className="w-full max-w-[680px] min-h-[4.5rem] sm:min-h-[5.5rem] flex items-center justify-center text-center">
           <h1
             className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white leading-tight text-balance transition-opacity duration-600 ease-out select-none"
             style={{ opacity: headlineLoaded ? 1 : 0 }}
@@ -843,7 +907,7 @@ export default function LandingPage() {
         </div>
 
         {/* Stat caption under center orb slot */}
-        <div aria-live="polite" className="h-14 flex flex-col items-center justify-center overflow-visible">
+        <div ref={captionRef} aria-live="polite" className="h-14 flex flex-col items-center justify-center overflow-visible">
           {activeConfig && textPhase !== 'hidden' ? (
             <div
               className={`flex flex-col items-center will-change-transform ${
