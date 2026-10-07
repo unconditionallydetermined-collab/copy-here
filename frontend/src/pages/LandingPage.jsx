@@ -77,8 +77,8 @@ export default function LandingPage() {
   const [textPhase, setTextPhase] = useState('idle') // 'idle' | 'exiting' | 'entering' | 'hidden'
   const [displayCount, setDisplayCount] = useState(PLATFORM_CONFIG.github.targetPercent)
   const [reducedMotion, setReducedMotion] = useState(false)
-  const [ctaPulse, setCtaPulse] = useState(false)
-  const [ctaThinking, setCtaThinking] = useState(false)
+  const [ctaShimmerActive, setCtaShimmerActive] = useState(false)
+  const [ctaShimmerCycle, setCtaShimmerCycle] = useState(0)
   const [pulseRingActive, setPulseRingActive] = useState(false)
   const [debugPhase, setDebugPhase] = useState('HOLD')
 
@@ -266,6 +266,12 @@ export default function LandingPage() {
       const dt = Math.min(rawDt, 0.04)
 
       if (document.visibilityState !== 'visible') {
+        if (state.phase === 'PULSE') {
+          setCtaShimmerActive(false)
+          state.phase = 'WAKE'
+          state.phaseStartTime = performance.now()
+          setDebugPhase('WAKE')
+        }
         animId = requestAnimationFrame(loop)
         return
       }
@@ -578,11 +584,9 @@ export default function LandingPage() {
           if (state.readCountDone && timeInPhase >= 1200 + quietDuration) {
             state.phase = 'PULSE'
             state.phaseStartTime = now
-            state.pulseStage = 1
-            state.pulseStartTime = now
             setDebugPhase('PULSE')
-            setCtaPulse(true)
-            setCtaThinking(true)
+            setCtaShimmerCycle((c) => c + 1)
+            setCtaShimmerActive(true)
           }
           break
         }
@@ -591,20 +595,18 @@ export default function LandingPage() {
           state.targetSpeed = 0
           state.currentSpeed = 0
 
-          const pulseElapsed = now - state.pulseStartTime
-          // Pulse 1: 0 - 1400ms
-          // Gap: 1400 - 1900ms
-          // Pulse 2: 1900 - 3300ms
-          if (state.pulseStage === 1 && pulseElapsed >= 1400) {
-            state.pulseStage = 2
-            setCtaPulse(false)
-            setCtaThinking(false)
-          } else if (state.pulseStage === 2 && pulseElapsed >= 1900) {
-            state.pulseStage = 3
-            setCtaPulse(true)
-          } else if (state.pulseStage === 3 && pulseElapsed >= 3300) {
-            setCtaPulse(false)
-            state.pulseStage = 0
+          const pulseElapsed = now - state.phaseStartTime
+          // Normal: 3550ms shimmer (2 sweeps @ 1400ms + 500ms pause + 250ms fade out)
+          // Reduced motion: 1200ms color ease
+          const shimmerDuration = reducedMotion ? 1200 : 3550
+          const totalPulseDuration = shimmerDuration + 600 // 600ms quiet pause after shimmer before WAKE
+
+          if (pulseElapsed >= shimmerDuration && ctaShimmerActive) {
+            setCtaShimmerActive(false)
+          }
+
+          if (pulseElapsed >= totalPulseDuration) {
+            setCtaShimmerActive(false)
             state.phase = 'WAKE'
             state.phaseStartTime = now
             setDebugPhase('WAKE')
@@ -891,33 +893,34 @@ export default function LandingPage() {
         <Link
           ref={buttonRef}
           to="/auth"
-          className={`relative overflow-hidden mt-6 inline-flex items-center justify-center min-w-[170px] min-h-[48px] px-8 py-3 rounded-xl bg-white text-slate-950 font-semibold text-base cta-button-glow ring-1 ring-white/45 active:scale-[0.97] transition-[transform,background-color,box-shadow,border-color] duration-300 ease-out hover:bg-slate-100 hover:ring-white/70 hover:scale-[1.02] touch-manipulation select-none border border-white/35 ${
-            ctaPulse ? 'animate-cta-pulse ring-2 ring-sky-400 shadow-[0_0_40px_rgba(56,189,248,0.55)]' : ''
-          }`}
+          className="relative overflow-hidden mt-6 inline-flex items-center justify-center min-w-[170px] min-h-[48px] px-8 py-3 rounded-xl bg-white text-slate-950 font-semibold text-base shadow-[0_0_0_1px_rgba(255,255,255,0.35)] active:scale-[0.97] transition-colors duration-200 ease-out hover:bg-slate-100 touch-manipulation select-none"
         >
-          {/* Subtle light sweep */}
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 w-1/2 bg-gradient-to-r from-transparent via-sky-400/20 to-transparent animate-btn-shimmer"
-          />
-
-          {/* Stacked label container: base label in text-slate-950 + dark shimmer overlay */}
-          <div className="relative z-10 grid grid-cols-1 grid-rows-1 items-center justify-center [&>*]:col-start-1 [&>*]:row-start-1">
+          {/* Stacked label container: single grid cell (1 / 1), size never changes */}
+          <span className="grid grid-cols-1 grid-rows-1 items-center justify-center text-center [&>*]:col-start-1 [&>*]:row-start-1">
             {/* Always visible base label (never blank or transparent) */}
-            <span className="text-slate-950 font-semibold text-base tracking-normal">
-              Get a job
-            </span>
-
-            {/* Dark gradient shimmer overlay that activates during thinking/pulse */}
             <span
-              aria-hidden="true"
-              className={`font-semibold text-base tracking-normal ai-thinking-overlay transition-opacity duration-250 ${
-                ctaThinking ? 'opacity-100' : 'opacity-0'
+              className={`font-semibold text-base tracking-normal select-none ${
+                reducedMotion && ctaShimmerActive
+                  ? 'animate-cta-reduced-color'
+                  : 'text-slate-950 opacity-100'
               }`}
             >
               Get a job
             </span>
-          </div>
+
+            {/* Shimmer overlay: moving gradient clipped to glyphs */}
+            {!reducedMotion && (
+              <span
+                key={ctaShimmerCycle}
+                aria-hidden="true"
+                className={`font-semibold text-base tracking-normal pointer-events-none select-none cta-text-shimmer ${
+                  ctaShimmerActive ? 'cta-text-shimmer-active' : ''
+                }`}
+              >
+                Get a job
+              </span>
+            )}
+          </span>
         </Link>
 
         {/* Secondary Sign In option below CTA */}
