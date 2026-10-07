@@ -113,7 +113,7 @@ export default function LandingPage() {
     returningOpacity: 0,
     dockSide: 'right', // 'right' (angle 0) or 'left' (angle PI)
     brakeStartAngle: 0,
-    brakeTargetAngle: 0,
+    brakeDelta: 0,
     brakeDuration: 2800,
     sharedPhase: 0,
     currentSpeed: 0.45, // rad/s (~26 deg/s)
@@ -127,6 +127,12 @@ export default function LandingPage() {
     pulseStage: 0, // 0 = not started, 1 = pulse 1, 2 = gap, 3 = pulse 2
     pulseStartTime: 0,
   })
+
+  // Persistent orbit slot per badge (0..2). A badge keeps its slot for its
+  // whole floating lifetime; only the badge returning from the center adopts
+  // the slot vacated by the badge that just docked. Prevents floating icons
+  // from being re-indexed into different slots (the "appears from nowhere" jump).
+  const slotAssignRef = useRef({ github: null, leetcode: 0, linkedin: 1, skills: 2 })
 
   // Physical simulation for floating icons
   const iconPhysicsRef = useRef({
@@ -181,18 +187,16 @@ export default function LandingPage() {
       const contentHalfW = heroRect.width / 2
       const contentHalfH = heroRect.height / 2
 
-      const minRx = contentHalfW + pad + iconRadius
-      const minRy = contentHalfH + pad + iconRadius
-
+      // True circular orbit: one radius for both axes, sized to clear the
+      // content column measured to its corner (not half-width), so there is
+      // no per-axis distortion and no viewport squashing. On small viewports
+      // icons travel off-screen rather than deform the circle.
+      const cornerDist = Math.sqrt(contentHalfW * contentHalfW + contentHalfH * contentHalfH)
+      const minR = cornerDist + pad + iconRadius
       const preferredR = Math.max(200, Math.min(vw * 0.44, vh * 0.40, 280))
-      let rx = Math.max(preferredR, minRx)
-      let ry = Math.max(preferredR * 0.88, minRy)
-
-      // Clamping within viewport with fallback
-      const maxViewportRx = vw / 2 - iconRadius - 10
-      if (rx > maxViewportRx) {
-        rx = Math.max(minRx, maxViewportRx)
-      }
+      const R = Math.max(preferredR, minR)
+      const rx = R
+      const ry = R
 
       const exclusionRect = {
         left: heroRect.left - pad,
@@ -242,15 +246,11 @@ export default function LandingPage() {
     const baseSpeedRad = (26 * Math.PI) / 180 // ~26 deg/s
     const maxAccel = (35 * Math.PI) / 180 // ~35 deg/s^2
 
-    // Helper: evaluate superellipse / squircle position at theta (0 = right dock point)
-    const getSquirclePoint = (theta, rx, ry) => {
-      const n = 2.6
-      const cosT = Math.cos(theta)
-      const sinT = Math.sin(theta)
-      const x = rx * Math.sign(cosT) * Math.pow(Math.abs(cosT), 2 / n)
-      const y = ry * Math.sign(sinT) * Math.pow(Math.abs(sinT), 2 / n)
-      return { x, y }
-    }
+    // Helper: point on a true circle at theta (0 = right dock point)
+    const getCirclePoint = (theta, radius) => ({
+      x: Math.cos(theta) * radius,
+      y: Math.sin(theta) * radius,
+    })
 
     const loop = (now) => {
       const state = stateRef.current
@@ -294,46 +294,51 @@ export default function LandingPage() {
           state.targetSpeed = baseSpeedRad
           const timeSinceLastCycle = now - state.lastCycleEndTime
 
-          // After >= 4s calm orbit, initiate BRAKE to dock next badge
+          // After >= 4s calm orbit, prepare to dock the next badge
           if (timeSinceLastCycle >= 4000) {
             const currentIdx = BADGES.indexOf(state.currentActiveId)
             const incoming = BADGES[(currentIdx + 1) % BADGES.length]
-            state.incomingId = incoming
 
-            // Determine slot index for incoming badge
-            const slotIdx = floatingIds.indexOf(incoming)
+            // Slot angle from the badge's persistent slot
+            const slotIdx = slotAssignRef.current[incoming] ?? floatingIds.indexOf(incoming)
             const incomingAngle = (state.sharedPhase + slotIdx * ((2 * Math.PI) / 3)) % (2 * Math.PI)
 
             // Choose dock point: angle 0 (right) or PI (left)
-            // Distance forward along rotation to angle 0 vs angle PI
             const distTo0 = (2 * Math.PI - incomingAngle) % (2 * Math.PI)
             const distToPI = (3 * Math.PI - incomingAngle) % (2 * Math.PI)
-
             const targetDockAngle = distTo0 <= distToPI ? 0 : Math.PI
-            const dockSide = targetDockAngle === 0 ? 'right' : 'left'
             const angleNeeded = targetDockAngle === 0 ? distTo0 : distToPI
 
-            // Smooth braking profile: v(t) = v0*(1 - t/T)^2
-            // Total distance during brake = v0 * T / 3
-            // So needed T = 3 * angleNeeded / v0
+            // Only start braking when the badge is close enough to a dock
+            // axis that it can glide there with an ease-out whose initial
+            // velocity matches the current orbital speed — no sudden speed
+            // change, and it stops exactly on the dock axis. Until then,
+            // keep cruising in HOLD.
             const v0 = Math.max(state.currentSpeed, baseSpeedRad)
-            const neededDurationSec = Math.max(1.8, Math.min(3.8, (3 * angleNeeded) / v0))
-
-            state.dockSide = dockSide
-            state.brakeStartAngle = incomingAngle
-            state.brakeTargetAngle = targetDockAngle
-            state.brakeDuration = neededDurationSec * 1000
-            state.phase = 'BRAKE'
-            state.phaseStartTime = now
-            setDebugPhase('BRAKE')
+            const brakeDurationSec = (2 * angleNeeded) / v0
+            if (brakeDurationSec <= 3.5) {
+              state.incomingId = incoming
+              state.dockSide = targetDockAngle === 0 ? 'right' : 'left'
+              state.brakeStartAngle = incomingAngle
+              state.brakeDelta = angleNeeded
+              state.brakeDuration = brakeDurationSec * 1000
+              state.phase = 'BRAKE'
+              state.phaseStartTime = now
+              setDebugPhase('BRAKE')
+            }
           }
           break
         }
 
         case 'BRAKE': {
           const p = Math.min(1, timeInPhase / state.brakeDuration)
-          // Cubic deceleration curve arriving smoothly at halt
-          state.targetSpeed = baseSpeedRad * Math.pow(1 - p, 2)
+          // Quadratic ease-out applied to the orbit phase itself: starts at
+          // the current orbital speed, ends at exactly the dock angle with
+          // zero velocity.
+          const progress = 1 - (1 - p) * (1 - p)
+          state.sharedPhase = state.brakeStartAngle + state.brakeDelta * progress
+          state.targetSpeed = 0
+          state.currentSpeed = 0
 
           if (p >= 1) {
             state.targetSpeed = 0
@@ -390,23 +395,33 @@ export default function LandingPage() {
 
           const incoming = state.incomingId
           const isRight = state.dockSide === 'right'
-          const startX = isRight ? geom.rx : -geom.rx
-          const currentX = startX * (1 - easeP)
+          // Fly from the badge's exact position when CHARGE ended (the dock
+          // point on the circle) to the exact center slot, so the comet
+          // starts where the orbit stopped and lands where the new icon
+          // renders — no snap at either end.
+          const slotOffX = geom.slotCenterX - geom.heroCenterX
+          const slotOffY = geom.slotCenterY - geom.heroCenterY
+          const startPX = physics[incoming] ? physics[incoming].x : (isRight ? geom.rx : -geom.rx)
+          const startPY = physics[incoming] ? physics[incoming].y : 0
+          const currentX = startPX + (slotOffX - startPX) * easeP
+          const currentY = startPY + (slotOffY - startPY) * easeP
 
           if (physics[incoming]) {
             physics[incoming].x = currentX
-            physics[incoming].y = 0 // Locked strictly to dock lane center
+            physics[incoming].y = currentY
             physics[incoming].scale = 1.14 - 0.14 * easeP
             physics[incoming].opacity = 1.0
           }
 
-          // Update comet tail
+          // Update comet tail (kept pointing against the direction of travel)
           if (cometTailRef.current) {
             const tailEl = cometTailRef.current
             tailEl.style.opacity = `${(1 - easeP * 0.4) * 0.55}`
             const tailLen = 130 * Math.sin(p * Math.PI)
-            const tailX = currentX + (isRight ? 1 : -1) * (geom.iconRadius + 4)
-            tailEl.style.transform = `translate3d(${tailX}px, 0, 0)`
+            const moveAngle = Math.atan2(slotOffY - startPY, slotOffX - startPX)
+            const tailX = currentX + Math.cos(moveAngle + Math.PI) * (geom.iconRadius + 4)
+            const tailY = currentY + Math.sin(moveAngle + Math.PI) * (geom.iconRadius + 4)
+            tailEl.style.transform = `translate3d(${tailX}px, ${tailY}px, 0) rotate(${moveAngle + Math.PI}rad)`
             tailEl.style.width = `${Math.max(0, tailLen)}px`
           }
 
@@ -421,8 +436,13 @@ export default function LandingPage() {
             state.phaseStartTime = now
             setDebugPhase('IMPACT')
 
-            // Swap active center configuration cleanly behind impact
+            // Swap active center configuration cleanly behind impact.
+            // The returning badge adopts the slot just vacated by the
+            // incoming badge, so the other floating icons keep their exact
+            // slots and nothing re-indexes or jumps.
             const prevActive = state.currentActiveId
+            slotAssignRef.current[prevActive] = slotAssignRef.current[incoming] ?? floatingIds.indexOf(incoming)
+            slotAssignRef.current[incoming] = null
             state.returningId = prevActive
             state.returningOpacity = 0
             state.currentActiveId = incoming
@@ -568,131 +588,38 @@ export default function LandingPage() {
           break
       }
 
-      // POSITIONS & PHYSICAL ELASTIC SEPARATION PASS
+      // POSITIONS PASS — deterministic circular orbit.
+      // Badges sit directly on the circle at their persistent slots with a
+      // gentle organic drift. No springs, no pairwise repulsion, no exclusion
+      // pushes: nothing fights the orbit, so the motion stays smooth and
+      // icons may travel off-screen instead of deforming the path.
       const isHalted = state.phase !== 'HOLD' && state.phase !== 'WAKE'
-      const driftScale = isHalted ? 0.25 : 1.0 // Calm drift during reading
+      const driftScale = isHalted ? 0.25 : 1.0
+      const heroCX = geom.heroCenterX
+      const heroCY = geom.heroCenterY
 
-      // 1. Calculate ideal slot targets for all 3 floating badges
-      const targetPositions = {}
-      floatingIds.forEach((id, idx) => {
-        const slotAngle = (state.sharedPhase + idx * ((2 * Math.PI) / 3)) % (2 * Math.PI)
-        const sq = getSquirclePoint(slotAngle, geom.rx, geom.ry)
+      floatingIds.forEach((id) => {
+        // Skip if this badge is currently flying as the comet
+        if (state.phase === 'COMET' && id === state.incomingId) return
+
+        const p = physics[id]
+        const slotIdx = slotAssignRef.current[id] ?? 0
+        const slotAngle = (state.sharedPhase + slotIdx * ((2 * Math.PI) / 3)) % (2 * Math.PI)
+        const sq = getCirclePoint(slotAngle, geom.rx)
 
         // Organic drift
         const dCfg = DRIFT_CONFIG[id]
         const rDrift = 7 * Math.sin(tSec / dCfg.T1 + dCfg.phi1) * driftScale
         const tDrift = 5 * Math.sin(tSec / dCfg.T2 + dCfg.phi2) * driftScale
 
-        const radDirX = sq.x / (Math.sqrt(sq.x * sq.x + sq.y * sq.y) || 1)
-        const radDirY = sq.y / (Math.sqrt(sq.x * sq.x + sq.y * sq.y) || 1)
+        const invLen = 1 / (Math.sqrt(sq.x * sq.x + sq.y * sq.y) || 1)
+        const radDirX = sq.x * invLen
+        const radDirY = sq.y * invLen
         const tanDirX = -radDirY
         const tanDirY = radDirX
 
-        const idealX = sq.x + radDirX * rDrift + tanDirX * tDrift
-        const idealY = sq.y + radDirY * rDrift + tanDirY * tDrift
-
-        targetPositions[id] = { x: idealX, y: idealY }
-      })
-
-      // 2. Damped spring physics towards ideal targets
-      const springK = 40
-      const dampingC = 7
-      floatingIds.forEach((id) => {
-        // Skip if this badge is currently actively flying as comet
-        if (state.phase === 'COMET' && id === state.incomingId) return
-
-        const p = physics[id]
-        const target = targetPositions[id]
-
-        const dispX = target.x - p.x
-        const dispY = target.y - p.y
-
-        const fx = springK * dispX - dampingC * p.vx
-        const fy = springK * dispY - dampingC * p.vy
-
-        p.vx += fx * dt
-        p.vy += fy * dt
-
-        p.x += p.vx * dt
-        p.y += p.vy * dt
-
-        // Cap displacement from ideal target at 24px
-        const offX = p.x - target.x
-        const offY = p.y - target.y
-        const offDist = Math.sqrt(offX * offX + offY * offY)
-        if (offDist > 24) {
-          p.x = target.x + (offX / offDist) * 24
-          p.y = target.y + (offY / offDist) * 24
-        }
-      })
-
-      // 3. Pairwise soft repulsive elastic spacing
-      const minDistance = geom.iconRadius * 4 // 2 * diameter
-      for (let iter = 0; iter < 2; iter++) {
-        for (let i = 0; i < floatingIds.length; i++) {
-          for (let j = i + 1; j < floatingIds.length; j++) {
-            const idA = floatingIds[i]
-            const idB = floatingIds[j]
-            if (state.phase === 'COMET' && (idA === state.incomingId || idB === state.incomingId)) continue
-
-            const pA = physics[idA]
-            const pB = physics[idB]
-
-            const dx = pB.x - pA.x
-            const dy = pB.y - pA.y
-            const dist = Math.sqrt(dx * dx + dy * dy)
-
-            if (dist < minDistance && dist > 0.001) {
-              const overlap = minDistance - dist
-              const pushX = (dx / dist) * (overlap * 0.5)
-              const pushY = (dy / dist) * (overlap * 0.5)
-
-              pA.x -= pushX * 0.4
-              pA.y -= pushY * 0.4
-              pB.x += pushX * 0.4
-              pB.y += pushY * 0.4
-
-              if (isDebug.current && iter === 0) {
-                console.warn(`[Orbit Debug] Soft repulsion between ${idA} and ${idB}: dist=${dist.toFixed(1)}px < min=${minDistance}px`)
-              }
-            }
-          }
-        }
-      }
-
-      // 4. Content Exclusion Zone Push-Out
-      const ex = geom.exclusionRect
-      const heroCX = geom.heroCenterX
-      const heroCY = geom.heroCenterY
-      const iconR = geom.iconRadius
-
-      floatingIds.forEach((id) => {
-        if (state.phase === 'COMET' && id === state.incomingId) return
-
-        const p = physics[id]
-        const screenX = heroCX + p.x
-        const screenY = heroCY + p.y
-
-        // Check circle collision with exclusion rectangle
-        const nearX = Math.max(ex.left, Math.min(screenX, ex.right))
-        const nearY = Math.max(ex.top, Math.min(screenY, ex.bottom))
-        const distX = screenX - nearX
-        const distY = screenY - nearY
-        const distSq = distX * distX + distY * distY
-
-        if (distSq < iconR * iconR) {
-          const dist = Math.sqrt(distSq) || 0.001
-          const pushOut = iconR - dist
-          const nx = distX / dist
-          const ny = distY / dist
-
-          p.x += nx * pushOut * 0.5
-          p.y += ny * pushOut * 0.5
-
-          if (isDebug.current) {
-            console.warn(`[Orbit Debug] Exclusion zone collision for ${id}: pushed out by ${pushOut.toFixed(1)}px`)
-          }
-        }
+        p.x = sq.x + radDirX * rDrift + tanDirX * tDrift
+        p.y = sq.y + radDirY * rDrift + tanDirY * tDrift
       })
 
       // 5. Opacity & Glow Updates
@@ -710,8 +637,11 @@ export default function LandingPage() {
         const p = physics[id]
 
         if (isCurrentActive) {
-          // Active icon sits inside the center slot
+          // Active icon sits inside the center slot; keep the physics
+          // opacity at 0 so its later return fade starts from invisible.
           el.style.opacity = '0'
+          p.opacity = 0
+          p.scale = 1
           el.style.pointerEvents = 'none'
           return
         }
