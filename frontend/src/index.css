@@ -1,17 +1,17 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 /* ============================================
    DESIGN TOKENS
    ============================================ */
 :root {
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, sans-serif;
+  --font-sans: 'Geist', system-ui, -apple-system, sans-serif;
   --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
   --apple-ease: cubic-bezier(0.16, 1, 0.3, 1);
   --apple-duration-fast: 150ms;
   --apple-duration-normal: 300ms;
 
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-sans: 'Geist', system-ui, -apple-system, sans-serif;
 
   /* Colors */
   --blue-50:  #eff6ff;
@@ -1028,3 +1028,16 @@ a:not(:disabled):active,
   animation: char-reveal 320ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+
+/* Landing Page Design System Tokens & Curves */
+.ease-fluid {
+  transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+.duration-fluid {
+  transition-duration: 700ms;
+}
+.hero-heading-gradient {
+  background: linear-gradient(to right, #FFFFFF, #9B9B9B);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}

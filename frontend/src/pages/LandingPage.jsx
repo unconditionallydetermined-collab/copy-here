@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { Link } from 'react-router-dom'
-import { Lightbulb, Code2 } from 'lucide-react'
+import { Lightbulb, Code2, Check, ArrowRight, ShieldCheck, Terminal } from 'lucide-react'
 import { Github, Linkedin } from '../components/Icons'
 import WaterRippleCanvas from '../components/WaterRippleCanvas'
+import FloatingIslandNav from '../components/FloatingIslandNav'
+import TaglineReveal from '../components/TaglineReveal'
 
 const PLATFORM_CONFIG = {
   github: {
     id: 'github',
     name: 'GitHub',
     label: 'GitHub',
-    targetPercent: 84,
+    targetPercent: 84.6,
     color: '#F8FAFC',
     icon: Github,
   },
@@ -18,7 +20,7 @@ const PLATFORM_CONFIG = {
     id: 'leetcode',
     name: 'LeetCode',
     label: 'LeetCode',
-    targetPercent: 78,
+    targetPercent: 78.4,
     color: '#FFA116',
     icon: Code2,
   },
@@ -26,7 +28,7 @@ const PLATFORM_CONFIG = {
     id: 'linkedin',
     name: 'LinkedIn',
     label: 'LinkedIn',
-    targetPercent: 92,
+    targetPercent: 91.8,
     color: '#38BDF8',
     icon: Linkedin,
   },
@@ -34,7 +36,7 @@ const PLATFORM_CONFIG = {
     id: 'skills',
     name: 'Skills',
     label: 'Skills',
-    targetPercent: 96,
+    targetPercent: 96.2,
     color: '#FACC15',
     icon: Lightbulb,
   },
@@ -42,7 +44,6 @@ const PLATFORM_CONFIG = {
 
 const BADGES = ['github', 'leetcode', 'linkedin', 'skills']
 
-// Per-badge organic drift constants
 const DRIFT_CONFIG = {
   github:   { T1: 8.2,  phi1: 0.2, T2: 11.4, phi2: 1.1 },
   leetcode: { T1: 9.6,  phi1: 2.3, T2: 10.2, phi2: 0.5 },
@@ -50,107 +51,88 @@ const DRIFT_CONFIG = {
   skills:   { T1: 10.5, phi1: 1.7, T2: 9.1,  phi2: 3.9 },
 }
 
-function AnimatedChars({ text, baseDelay = 0, speed = 18 }) {
-  return (
-    <>
-      {text.split('').map((char, i) => (
-        <span
-          key={i}
-          className="inline-block animate-char-reveal will-change-transform opacity-0"
-          style={{
-            animationDelay: `${baseDelay + i * speed}ms`,
-            animationFillMode: 'forwards',
-            whiteSpace: char === ' ' ? 'pre' : 'normal',
-          }}
-        >
-          {char}
-        </span>
-      ))}
-    </>
-  )
-}
-
 export default function LandingPage() {
-  const [activeStageId, setActiveStageId] = useState('github')
+  // Randomise initial center app
+  const [initialRandomBadge] = useState(() => {
+    const randomIndex = Math.floor(Math.random() * BADGES.length)
+    return BADGES[randomIndex]
+  })
+
+  const [activeStageId, setActiveStageId] = useState(initialRandomBadge)
   const [exitingStageId, setExitingStageId] = useState(null)
   const [exitingOpacity, setExitingOpacity] = useState(1.0)
-  const [textPhase, setTextPhase] = useState('idle') // 'idle' | 'exiting' | 'entering' | 'hidden'
-  const [displayCount, setDisplayCount] = useState(PLATFORM_CONFIG.github.targetPercent)
+  const [textPhase, setTextPhase] = useState('idle')
+  const [displayCount, setDisplayCount] = useState(PLATFORM_CONFIG[initialRandomBadge].targetPercent)
   const [reducedMotion, setReducedMotion] = useState(false)
-  const [ctaShimmerActive, setCtaShimmerActive] = useState(false)
-  const [ctaShimmerCycle, setCtaShimmerCycle] = useState(0)
   const [pulseRingActive, setPulseRingActive] = useState(false)
-  const [debugPhase, setDebugPhase] = useState('HOLD')
+  const [openFaqIndex, setOpenFaqIndex] = useState(null)
 
   const heroWrapperRef = useRef(null)
   const centerSlotRef = useRef(null)
-  const buttonRef = useRef(null)
   const pulseTimerRef = useRef(null)
   const rippleRef = useRef(null)
   const badgeDomRefs = useRef({})
   const cometTailRef = useRef(null)
 
-  // Layout & geometry cached state
   const geomRef = useRef({
     heroCenterX: 0,
     heroCenterY: 0,
     slotCenterX: 0,
     slotCenterY: 0,
-    exclusionRect: { left: 0, top: 0, right: 0, bottom: 0 },
-    rx: 240,
-    ry: 240,
-    iconRadius: 36,
-    pad: 28,
+    rx: 220,
+    ry: 220,
+    iconRadius: 27,
+    pad: 24,
   })
 
-  // State machine & animation refs
+  // Dynamic slot assignment based on initial random badge
+  const slotAssignRef = useRef({
+    github: 0,
+    leetcode: 1,
+    linkedin: 2,
+    skills: 0,
+  })
+
   const stateRef = useRef({
-    phase: 'HOLD', // HOLD | BRAKE | CHARGE | COMET | IMPACT | SETTLE | READ | PULSE | WAKE
+    phase: 'HOLD',
     phaseStartTime: performance.now(),
-    currentActiveId: 'github',
+    currentActiveId: initialRandomBadge,
     incomingId: null,
     returningId: null,
     returningOpacity: 0,
-    dockSide: 'right', // 'right' (angle 0) or 'left' (angle PI)
+    dockSide: 'right',
     brakeStartAngle: 0,
     brakeDelta: 0,
-    brakeDuration: 2800,
+    brakeDuration: 1800,
     sharedPhase: 0,
-    currentSpeed: 0.45, // rad/s (~26 deg/s)
+    currentSpeed: 0.45,
     targetSpeed: 0.45,
     lastTime: performance.now(),
     lastCycleEndTime: performance.now(),
-    readTargetCount: PLATFORM_CONFIG.github.targetPercent,
+    readTargetCount: PLATFORM_CONFIG[initialRandomBadge].targetPercent,
     readCountStart: 0,
     readCountDone: true,
-    lastSettleCheck: 0,
-    pulseStage: 0, // 0 = not started, 1 = pulse 1, 2 = gap, 3 = pulse 2
-    pulseStartTime: 0,
-    waitingIncomingId: null,
     cometStartX: 0,
     cometStartY: 0,
   })
 
-  // Persistent orbit slot per badge (0..2). A badge keeps its slot for its
-  // whole floating lifetime; only the badge returning from the center adopts
-  // the slot vacated by the badge that just docked. Prevents floating icons
-  // from being re-indexed into different slots (the "appears from nowhere" jump).
-  const slotAssignRef = useRef({ github: null, leetcode: 0, linkedin: 1, skills: 2 })
+  // Set up initial floating slots
+  useEffect(() => {
+    const floating = BADGES.filter((b) => b !== initialRandomBadge)
+    const newSlots = {}
+    floating.forEach((id, idx) => {
+      newSlots[id] = idx
+    })
+    newSlots[initialRandomBadge] = null
+    slotAssignRef.current = newSlots
+  }, [initialRandomBadge])
 
-  // Physical simulation for floating icons
   const iconPhysicsRef = useRef({
     github:   { x: 0, y: 0, vx: 0, vy: 0, opacity: 0.85, scale: 1 },
     leetcode: { x: 0, y: 0, vx: 0, vy: 0, opacity: 0.85, scale: 1 },
     linkedin: { x: 0, y: 0, vx: 0, vy: 0, opacity: 0.85, scale: 1 },
     skills:   { x: 0, y: 0, vx: 0, vy: 0, opacity: 0.85, scale: 1 },
   })
-
-  // Debug flag (?debug=orbit)
-  const isDebug = useRef(
-    typeof window !== 'undefined' &&
-    window.location.search.includes('debug=orbit') &&
-    import.meta.env.DEV
-  )
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -160,16 +142,15 @@ export default function LandingPage() {
     return () => mq.removeEventListener('change', handler)
   }, [])
 
-  // Geometry measurement & exclusion zone calculation
   useEffect(() => {
     const updateGeometry = () => {
-      const vw = window.innerWidth
-      const vh = window.innerHeight
-
       const heroEl = heroWrapperRef.current
       const slotEl = centerSlotRef.current
 
-      let heroRect = { left: vw / 2 - 160, top: vh / 2 - 160, width: 320, height: 320, right: vw / 2 + 160, bottom: vh / 2 + 160 }
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+
+      let heroRect = { left: vw / 2 - 160, top: vh / 2 - 160, width: 320, height: 320 }
       if (heroEl) {
         heroRect = heroEl.getBoundingClientRect()
       }
@@ -179,78 +160,41 @@ export default function LandingPage() {
         slotRect = slotEl.getBoundingClientRect()
       }
 
-      // Reduced orb radius by ~40% (36px -> 27px)
-      const iconRadius = vw < 360 ? 18 : vw < 480 ? 22 : 27
-      const pad = vw < 360 ? 14 : vw < 480 ? 20 : 26
+      const iconRadius = vw < 480 ? 22 : 27
+      const pad = vw < 480 ? 16 : 24
 
       const heroCenterX = heroRect.left + heroRect.width / 2
       const heroCenterY = heroRect.top + heroRect.height / 2
       const slotCenterX = slotRect.left + slotRect.width / 2
       const slotCenterY = slotRect.top + slotRect.height / 2
 
-      const contentHalfW = heroRect.width / 2
-      const contentHalfH = heroRect.height / 2
-
-      // True circular orbit: one radius for both axes, sized to clear the
-      // content column measured to its corner (not half-width), so there is
-      // no per-axis distortion and no viewport squashing. On small viewports
-      // icons travel off-screen rather than deform the circle.
-      const cornerDist = Math.sqrt(contentHalfW * contentHalfW + contentHalfH * contentHalfH)
-      const minR = cornerDist + pad + iconRadius
-      const preferredR = Math.max(200, Math.min(vw * 0.44, vh * 0.40, 280))
-      const R = Math.max(preferredR, minR)
-      const rx = R
-      const ry = R
-
-      const exclusionRect = {
-        left: heroRect.left - pad,
-        top: heroRect.top - pad,
-        right: heroRect.right + pad,
-        bottom: heroRect.bottom + pad,
-      }
+      // Calibrate orbit radius so badges comfortably frame the center content without clipping screen
+      const preferredR = Math.max(160, Math.min(vw * 0.38, 250))
 
       geomRef.current = {
         heroCenterX,
         heroCenterY,
         slotCenterX,
         slotCenterY,
-        exclusionRect,
-        rx,
-        ry,
+        rx: preferredR,
+        ry: preferredR,
         iconRadius,
         pad,
-      }
-
-      if (rippleRef.current) {
-        rippleRef.current.setProtectedRect(exclusionRect)
       }
     }
 
     updateGeometry()
     window.addEventListener('resize', updateGeometry)
-
-    const observer = new ResizeObserver(() => {
-      updateGeometry()
-    })
-    if (heroWrapperRef.current) {
-      observer.observe(heroWrapperRef.current)
-    }
-
-    return () => {
-      window.removeEventListener('resize', updateGeometry)
-      observer.disconnect()
-    }
+    return () => window.removeEventListener('resize', updateGeometry)
   }, [])
 
-  // Main 60fps Animation Loop with Unified State Machine
   useEffect(() => {
     if (reducedMotion) return
 
     let animId = null
-    const baseSpeedRad = (26 * Math.PI) / 180 // ~26 deg/s
-    const maxAccel = (35 * Math.PI) / 180 // ~35 deg/s^2
+    const baseSpeedRad = (28 * Math.PI) / 180
+    const maxAccel = (40 * Math.PI) / 180
 
-    // Helper: point on a true circle at theta (0 = right dock point)
     const getCirclePoint = (theta, radius) => ({
       x: Math.cos(theta) * radius,
       y: Math.sin(theta) * radius,
@@ -266,20 +210,12 @@ export default function LandingPage() {
       const dt = Math.min(rawDt, 0.04)
 
       if (document.visibilityState !== 'visible') {
-        if (state.phase === 'PULSE') {
-          setCtaShimmerActive(false)
-          state.phase = 'WAKE'
-          state.phaseStartTime = performance.now()
-          setDebugPhase('WAKE')
-        }
         animId = requestAnimationFrame(loop)
         return
       }
 
       const tSec = now / 1000
-      const breathing = 1.0 + 0.15 * Math.sin((tSec * 2 * Math.PI) / 18)
-
-      // Velocity-continuous speed change
+      const breathing = 1.0 + 0.1 * Math.sin((tSec * 2 * Math.PI) / 16)
       const targetSpeed = state.targetSpeed * breathing
       const speedDiff = targetSpeed - state.currentSpeed
       const maxDeltaV = maxAccel * dt
@@ -289,14 +225,10 @@ export default function LandingPage() {
         state.currentSpeed += Math.sign(speedDiff) * maxDeltaV
       }
 
-      // Advance shared orbit phase
       state.sharedPhase = (state.sharedPhase + state.currentSpeed * dt) % (2 * Math.PI)
       if (state.sharedPhase < 0) state.sharedPhase += 2 * Math.PI
 
-      // Non-active floating badges currently in orbit (always 3 badges)
       const floatingIds = BADGES.filter((id) => id !== state.currentActiveId)
-
-      // STATE MACHINE ADVANCE
       const timeInPhase = now - state.phaseStartTime
 
       switch (state.phase) {
@@ -304,95 +236,37 @@ export default function LandingPage() {
           state.targetSpeed = baseSpeedRad
           const timeSinceLastCycle = now - state.lastCycleEndTime
 
-          // After >= 3.5s calm orbit, evaluate candidates in viewing zone
-          if (timeSinceLastCycle >= 3500) {
+          // Reliably trigger the strike & replacement after 3.2s
+          if (timeSinceLastCycle >= 3200) {
             const currentIdx = BADGES.indexOf(state.currentActiveId)
-            const nextStoryCandidate = BADGES[(currentIdx + 1) % BADGES.length]
+            const nextCandidate = BADGES[(currentIdx + 1) % BADGES.length]
+            const slotIdx = slotAssignRef.current[nextCandidate] ?? 0
+            const incomingAngle = (state.sharedPhase + slotIdx * ((2 * Math.PI) / 3)) % (2 * Math.PI)
 
-            const isBadgeInViewingZone = (id, margin = 24) => {
-              const p = physics[id]
-              if (!p) return false
-              const sx = geom.heroCenterX + p.x
-              const sy = geom.heroCenterY + p.y
-              const r = geom.iconRadius
-              return (
-                sx - r >= margin &&
-                sx + r <= window.innerWidth - margin &&
-                sy - r >= margin &&
-                sy + r <= window.innerHeight - margin
-              )
-            }
+            const v0 = Math.max(state.currentSpeed, baseSpeedRad)
+            const brakeSec = 1.2
+            const brakeDelta = (v0 * brakeSec) / 2
 
-            const isAngleInViewingZone = (theta, margin = 24) => {
-              const sx = geom.heroCenterX + Math.cos(theta) * geom.rx
-              const sy = geom.heroCenterY + Math.sin(theta) * geom.ry
-              const r = geom.iconRadius
-              return (
-                sx - r >= margin &&
-                sx + r <= window.innerWidth - margin &&
-                sy - r >= margin &&
-                sy + r <= window.innerHeight - margin
-              )
-            }
-
-            const onScreenBadges = floatingIds.filter((id) => isBadgeInViewingZone(id))
-
-            let incoming = null
-            if (state.waitingIncomingId) {
-              // Waiting for a pre-selected icon to enter the viewing zone
-              if (isBadgeInViewingZone(state.waitingIncomingId)) {
-                incoming = state.waitingIncomingId
-              }
-            } else if (onScreenBadges.includes(nextStoryCandidate)) {
-              incoming = nextStoryCandidate
-            } else if (onScreenBadges.length > 0) {
-              incoming = onScreenBadges[0]
-            } else {
-              // None are on screen: select one and wait for it to enter the viewing zone
-              state.waitingIncomingId = nextStoryCandidate
-            }
-
-            if (incoming) {
-              const slotIdx = slotAssignRef.current[incoming] ?? floatingIds.indexOf(incoming)
-              const incomingAngle = (state.sharedPhase + slotIdx * ((2 * Math.PI) / 3)) % (2 * Math.PI)
-
-              const v0 = Math.max(state.currentSpeed, baseSpeedRad)
-              const brakeSec = 1.4
-              const brakeDelta = (v0 * brakeSec) / 2
-              const stopAngle = (incomingAngle + brakeDelta) % (2 * Math.PI)
-
-              // Verify the badge remains on screen and halts fully inside viewing zone
-              if (isAngleInViewingZone(stopAngle)) {
-                state.incomingId = incoming
-                state.waitingIncomingId = null
-                state.brakeStartAngle = incomingAngle
-                state.brakeDelta = brakeDelta
-                state.brakeDuration = brakeSec * 1000
-                state.phase = 'BRAKE'
-                state.phaseStartTime = now
-                setDebugPhase('BRAKE')
-              }
-            }
+            state.incomingId = nextCandidate
+            state.brakeStartAngle = incomingAngle
+            state.brakeDelta = brakeDelta
+            state.brakeDuration = brakeSec * 1000
+            state.phase = 'BRAKE'
+            state.phaseStartTime = now
           }
           break
         }
 
         case 'BRAKE': {
           const p = Math.min(1, timeInPhase / state.brakeDuration)
-          // Quadratic ease-out applied to the orbit phase itself: starts at
-          // the current orbital speed, ends at exactly the dock angle with
-          // zero velocity.
           const progress = 1 - (1 - p) * (1 - p)
           state.sharedPhase = state.brakeStartAngle + state.brakeDelta * progress
           state.targetSpeed = 0
           state.currentSpeed = 0
 
           if (p >= 1) {
-            state.targetSpeed = 0
-            state.currentSpeed = 0
             state.phase = 'CHARGE'
             state.phaseStartTime = now
-            setDebugPhase('CHARGE')
             setTextPhase('exiting')
             setExitingStageId(state.currentActiveId)
             setExitingOpacity(1.0)
@@ -403,23 +277,16 @@ export default function LandingPage() {
         case 'CHARGE': {
           state.targetSpeed = 0
           state.currentSpeed = 0
-
-          // Center icon fades in-place with opacity only:
-          // 150-700ms: 1 -> 0.1
-          if (timeInPhase >= 150) {
-            const fadeElapsed = timeInPhase - 150
-            const fadeP = Math.min(1, fadeElapsed / 550)
-            const op = Math.max(0.1, 1 - 0.9 * fadeP)
-            setExitingOpacity(op)
+          if (timeInPhase >= 100) {
+            const fadeP = Math.min(1, (timeInPhase - 100) / 450)
+            setExitingOpacity(Math.max(0.1, 1 - 0.9 * fadeP))
           }
-
-          if (timeInPhase >= 900) {
+          if (timeInPhase >= 650) {
             const inc = state.incomingId
             state.cometStartX = physics[inc] ? physics[inc].x : 0
             state.cometStartY = physics[inc] ? physics[inc].y : 0
             state.phase = 'COMET'
             state.phaseStartTime = now
-            setDebugPhase('COMET')
             setTextPhase('hidden')
           }
           break
@@ -428,104 +295,61 @@ export default function LandingPage() {
         case 'COMET': {
           state.targetSpeed = 0
           state.currentSpeed = 0
-
-          // Complete center icon fade to 0 over first 150ms of comet run
-          if (timeInPhase <= 150) {
-            const op = 0.1 * (1 - timeInPhase / 150)
-            setExitingOpacity(op)
+          if (timeInPhase <= 120) {
+            setExitingOpacity(0.1 * (1 - timeInPhase / 120))
           } else {
             setExitingOpacity(0)
             setExitingStageId(null)
           }
 
-          const cometDuration = 480
+          const cometDuration = 420
           const p = Math.min(1, timeInPhase / cometDuration)
-          // Accelerating ease-in curve
-          const easeP = Math.pow(p, 2.4)
-
+          const easeP = Math.pow(p, 2.2)
           const incoming = state.incomingId
-          const isRight = state.dockSide === 'right'
-          // Fly from the badge's exact position when CHARGE ended (the dock
-          // point on the circle) to the exact center slot, so the comet
-          // starts where the orbit stopped and lands where the new icon
-          // renders — no snap at either end.
           const slotOffX = geom.slotCenterX - geom.heroCenterX
           const slotOffY = geom.slotCenterY - geom.heroCenterY
-          const startPX = state.cometStartX
-          const startPY = state.cometStartY
-          const currentX = startPX + (slotOffX - startPX) * easeP
-          const currentY = startPY + (slotOffY - startPY) * easeP
+          const currentX = state.cometStartX + (slotOffX - state.cometStartX) * easeP
+          const currentY = state.cometStartY + (slotOffY - state.cometStartY) * easeP
 
           if (physics[incoming]) {
             physics[incoming].x = currentX
             physics[incoming].y = currentY
-            physics[incoming].scale = 1.14 - 0.14 * easeP
+            physics[incoming].scale = 1.15 - 0.15 * easeP
             physics[incoming].opacity = 1.0
           }
 
-          // Update comet tail (kept pointing against the direction of travel)
-          if (cometTailRef.current) {
-            const tailEl = cometTailRef.current
-            tailEl.style.opacity = `${(1 - easeP * 0.4) * 0.55}`
-            const tailLen = 130 * Math.sin(p * Math.PI)
-            const moveAngle = Math.atan2(slotOffY - startPY, slotOffX - startPX)
-            const tailX = currentX + Math.cos(moveAngle + Math.PI) * (geom.iconRadius + 4)
-            const tailY = currentY + Math.sin(moveAngle + Math.PI) * (geom.iconRadius + 4)
-            tailEl.style.transform = `translate3d(${tailX}px, ${tailY}px, 0) rotate(${moveAngle + Math.PI}rad)`
-            tailEl.style.width = `${Math.max(0, tailLen)}px`
-          }
-
-          // Gentle dot nudge along flight corridor
-          if (rippleRef.current && p > 0.1 && p < 0.9) {
-            rippleRef.current.displaceAt(geom.slotCenterX + currentX, geom.slotCenterY, 8)
-          }
-
           if (p >= 1) {
-            // IMPACT!
+            // Impact and replace center badge!
             state.phase = 'IMPACT'
             state.phaseStartTime = now
-            setDebugPhase('IMPACT')
-
-            // Swap active center configuration cleanly behind impact.
-            // The returning badge adopts the slot just vacated by the
-            // incoming badge, so the other floating icons keep their exact
-            // slots and nothing re-indexes or jumps.
             const prevActive = state.currentActiveId
-            slotAssignRef.current[prevActive] = slotAssignRef.current[incoming] ?? floatingIds.indexOf(incoming)
+            slotAssignRef.current[prevActive] = slotAssignRef.current[incoming] ?? 0
             slotAssignRef.current[incoming] = null
             state.returningId = prevActive
             state.returningOpacity = 0
             state.currentActiveId = incoming
             setActiveStageId(incoming)
 
-            // Trigger single gentle ripple and damping boost
             if (rippleRef.current) {
               rippleRef.current.triggerSlam(geom.slotCenterX, geom.slotCenterY, {
-                intensity: 105,
-                speed: 270,
-                width: 54,
-                maxRadius: 330,
-                blastRadius: 90,
+                intensity: 110,
+                speed: 280,
+                width: 50,
+                maxRadius: 320,
+                blastRadius: 85,
               })
-              rippleRef.current.boostDamping(1200)
             }
-
-            // Pulse ring at center slot
             setPulseRingActive(true)
             if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current)
-            pulseTimerRef.current = setTimeout(() => setPulseRingActive(false), 600)
+            pulseTimerRef.current = setTimeout(() => setPulseRingActive(false), 550)
           }
           break
         }
 
         case 'IMPACT': {
-          if (timeInPhase >= 300) {
+          if (timeInPhase >= 250) {
             state.phase = 'SETTLE'
             state.phaseStartTime = now
-            setDebugPhase('SETTLE')
-            if (cometTailRef.current) {
-              cometTailRef.current.style.opacity = '0'
-            }
           }
           break
         }
@@ -533,26 +357,14 @@ export default function LandingPage() {
         case 'SETTLE': {
           state.targetSpeed = 0
           state.currentSpeed = 0
-
-          // Re-materialize previous active badge in its vacated floating slot
-          // Starting >= 300ms after impact, opacity 0 -> 0.5 over 500ms
-          if (timeInPhase >= 300) {
-            const retP = Math.min(1, (timeInPhase - 300) / 500)
+          if (timeInPhase >= 200) {
+            const retP = Math.min(1, (timeInPhase - 200) / 400)
             state.returningOpacity = 0.5 * retP
           }
-
-          // Check if canvas is settled, min 700ms, max 2200ms
-          const minMet = timeInPhase >= 700
-          const maxMet = timeInPhase >= 2200
-          const isCanvasSettled = rippleRef.current ? rippleRef.current.isSettled() : true
-
-          if ((minMet && isCanvasSettled) || maxMet) {
+          if (timeInPhase >= 700) {
             state.phase = 'READ'
             state.phaseStartTime = now
-            setDebugPhase('READ')
             setTextPhase('entering')
-
-            // Start smooth performance.now percentage counter
             state.readTargetCount = PLATFORM_CONFIG[state.currentActiveId].targetPercent
             state.readCountStart = now
             state.readCountDone = false
@@ -564,67 +376,32 @@ export default function LandingPage() {
         case 'READ': {
           state.targetSpeed = 0
           state.currentSpeed = 0
-
-          // Smooth counter interpolation over 1200ms with easeOutCubic
           if (!state.readCountDone) {
             const countElapsed = now - state.readCountStart
-            const countP = Math.min(1, countElapsed / 1200)
+            const countP = Math.min(1, countElapsed / 1000)
             const easeCount = 1 - Math.pow(1 - countP, 3)
-            const val = Math.round(state.readTargetCount * easeCount)
+            const val = parseFloat((state.readTargetCount * easeCount).toFixed(1))
             setDisplayCount(val)
-
             if (countP >= 1) {
               state.readCountDone = true
               setDisplayCount(state.readTargetCount)
             }
           }
-
-          // Hold READ for at least 1200ms after count finishes + 2500ms quiet pause
-          const quietDuration = 1200 + 2500
-          if (state.readCountDone && timeInPhase >= 1200 + quietDuration) {
-            state.phase = 'PULSE'
-            state.phaseStartTime = now
-            setDebugPhase('PULSE')
-            setCtaShimmerCycle((c) => c + 1)
-            setCtaShimmerActive(true)
-          }
-          break
-        }
-
-        case 'PULSE': {
-          state.targetSpeed = 0
-          state.currentSpeed = 0
-
-          const pulseElapsed = now - state.phaseStartTime
-          // Normal: 3550ms shimmer (2 sweeps @ 1400ms + 500ms pause + 250ms fade out)
-          // Reduced motion: 1200ms color ease
-          const shimmerDuration = reducedMotion ? 1200 : 3550
-          const totalPulseDuration = shimmerDuration + 600 // 600ms quiet pause after shimmer before WAKE
-
-          if (pulseElapsed >= shimmerDuration && ctaShimmerActive) {
-            setCtaShimmerActive(false)
-          }
-
-          if (pulseElapsed >= totalPulseDuration) {
-            setCtaShimmerActive(false)
+          if (state.readCountDone && timeInPhase >= 2600) {
             state.phase = 'WAKE'
             state.phaseStartTime = now
-            setDebugPhase('WAKE')
           }
           break
         }
 
         case 'WAKE': {
-          // Speed eases 0 -> baseSpeed over 2500ms
-          const wakeP = Math.min(1, timeInPhase / 2500)
+          const wakeP = Math.min(1, timeInPhase / 1800)
           const easeWake = 0.5 - 0.5 * Math.cos(wakeP * Math.PI)
           state.targetSpeed = baseSpeedRad * easeWake
-
           if (wakeP >= 1) {
             state.phase = 'HOLD'
             state.phaseStartTime = now
             state.lastCycleEndTime = now
-            setDebugPhase('HOLD')
             setTextPhase('idle')
           }
           break
@@ -634,70 +411,44 @@ export default function LandingPage() {
           break
       }
 
-      // POSITIONS PASS — deterministic circular orbit.
-      // Badges sit directly on the circle at their persistent slots with a
-      // gentle organic drift. No springs, no pairwise repulsion, no exclusion
-      // pushes: nothing fights the orbit, so the motion stays smooth and
-      // icons may travel off-screen instead of deforming the path.
       const isHalted = state.phase !== 'HOLD' && state.phase !== 'WAKE'
-      const driftScale = isHalted ? 0.25 : 1.0
-      const heroCX = geom.heroCenterX
-      const heroCY = geom.heroCenterY
+      const driftScale = isHalted ? 0.2 : 1.0
 
       floatingIds.forEach((id) => {
-        // Skip if this badge is currently flying as the comet
         if (state.phase === 'COMET' && id === state.incomingId) return
-
         const p = physics[id]
         const slotIdx = slotAssignRef.current[id] ?? 0
         const slotAngle = (state.sharedPhase + slotIdx * ((2 * Math.PI) / 3)) % (2 * Math.PI)
         const sq = getCirclePoint(slotAngle, geom.rx)
 
-        // Organic drift
         const dCfg = DRIFT_CONFIG[id]
-        const rDrift = 7 * Math.sin(tSec / dCfg.T1 + dCfg.phi1) * driftScale
-        const tDrift = 5 * Math.sin(tSec / dCfg.T2 + dCfg.phi2) * driftScale
-
+        const rDrift = 5 * Math.sin(tSec / dCfg.T1 + dCfg.phi1) * driftScale
+        const tDrift = 3 * Math.sin(tSec / dCfg.T2 + dCfg.phi2) * driftScale
         const invLen = 1 / (Math.sqrt(sq.x * sq.x + sq.y * sq.y) || 1)
-        const radDirX = sq.x * invLen
-        const radDirY = sq.y * invLen
-        const tanDirX = -radDirY
-        const tanDirY = radDirX
-
-        p.x = sq.x + radDirX * rDrift + tanDirX * tDrift
-        p.y = sq.y + radDirY * rDrift + tanDirY * tDrift
+        p.x = sq.x + (sq.x * invLen) * rDrift + (-sq.y * invLen) * tDrift
+        p.y = sq.y + (sq.y * invLen) * rDrift + (sq.x * invLen) * tDrift
       })
 
-      // 5. Opacity & Glow Updates
-      const isDimmed = state.phase === 'CHARGE' || state.phase === 'COMET' || state.phase === 'IMPACT' || state.phase === 'SETTLE' || state.phase === 'READ' || state.phase === 'PULSE'
-      const targetFloatingOpacity = isDimmed ? 0.5 : 0.85
+      const isDimmed = state.phase !== 'HOLD' && state.phase !== 'WAKE'
+      const targetFloatingOpacity = isDimmed ? 0.45 : 0.85
       const hoverLights = []
 
       BADGES.forEach((id) => {
         const el = badgeDomRefs.current[id]
         if (!el) return
-
         const isCurrentActive = id === state.currentActiveId
         const isIncoming = id === state.incomingId
         const isReturning = id === state.returningId
         const p = physics[id]
 
         if (isCurrentActive) {
-          // Active icon sits inside the center slot; keep the physics
-          // opacity at 0 so its later return fade starts from invisible.
           el.style.opacity = '0'
           p.opacity = 0
-          p.scale = 1
-          el.style.pointerEvents = 'none'
           return
         }
 
-        el.style.pointerEvents = 'auto'
-
-        // Determine target opacity and scale
         let op = targetFloatingOpacity
         let sc = 1.0
-
         if (isIncoming && state.phase === 'CHARGE') {
           op = 1.0
           sc = 1.14
@@ -711,30 +462,20 @@ export default function LandingPage() {
         p.opacity += (op - p.opacity) * 0.15
         p.scale += (sc - p.scale) * 0.15
 
-        // Bottom edge gradient: orbs smoothly lose opacity as they fly into the bottom zone
-        const screenY = heroCY + p.y
-        const distFromBottom = geom.height - screenY
-        const BOTTOM_FADE_MARGIN = Math.max(220, Math.min(320, geom.height * 0.3))
-        const bottomFactor = Math.min(1, Math.max(0, distFromBottom / BOTTOM_FADE_MARGIN))
-        const bottomGradient = 0.5 - 0.5 * Math.cos(bottomFactor * Math.PI)
-        const effectiveOpacity = p.opacity * bottomGradient
-
         el.style.transform = `translate3d(${p.x}px, ${p.y}px, 0) scale(${p.scale})`
-        el.style.opacity = `${effectiveOpacity.toFixed(3)}`
+        el.style.opacity = `${p.opacity.toFixed(3)}`
 
-        // Hover lights on water ripple canvas scale with effective opacity
-        if (effectiveOpacity > 0.08) {
+        if (p.opacity > 0.08) {
           hoverLights.push({
-            x: heroCX + p.x,
-            y: heroCY + p.y,
+            x: geom.heroCenterX + p.x,
+            y: geom.heroCenterY + p.y,
             moving: !isHalted,
           })
         }
       })
 
       if (rippleRef.current) {
-        const dimFactor = isDimmed ? 0.4 : 1.0
-        rippleRef.current.setHoverLights(hoverLights, dimFactor)
+        rippleRef.current.setHoverLights(hoverLights, isDimmed ? 0.35 : 1.0)
       }
 
       animId = requestAnimationFrame(loop)
@@ -749,199 +490,574 @@ export default function LandingPage() {
   const activeConfig = activeStageId ? PLATFORM_CONFIG[activeStageId] : null
   const exitingConfig = exitingStageId ? PLATFORM_CONFIG[exitingStageId] : null
 
+  const faqItems = [
+    {
+      q: 'Which platforms connect to my portfolio profile?',
+      a: 'CareerSync connects directly to your public GitHub profile and repositories, LeetCode contest rankings and problem statistics, and LinkedIn credentials. Each integration requires zero passwords.',
+    },
+    {
+      q: 'How does CareerSync verify my GitHub activity?',
+      a: 'We query the public GitHub API to verify your contribution heatmaps, merged pull requests, and repository stars. This generates cryptographic proof badges that hiring managers can audit in one click.',
+    },
+    {
+      q: 'Do I need to grant write access to my repositories?',
+      a: 'No. CareerSync only requires read access to your public metrics. Your private repositories, code contents, and commit messages remain completely untouched and private.',
+    },
+    {
+      q: 'Can I connect a custom domain to my profile?',
+      a: 'Yes. Every verified profile receives a fast public link, and you can point your personal domain with automatic HTTPS provisioning.',
+    },
+    {
+      q: 'How does this differ from sending a standard PDF resume?',
+      a: 'Resumes are static text that automated filters scan in six seconds. CareerSync gives technical recruiters interactive proof of what you built, live code telemetry, and verified algorithmic performance.',
+    },
+    {
+      q: 'Does CareerSync work for self taught developers and students?',
+      a: 'Yes. Engineering teams evaluate proof over credentials. A verified portfolio with daily GitHub activity and solved algorithmic problems outranks a pedigree without proof.',
+    },
+    {
+      q: 'What is the cost for individual developers?',
+      a: 'The core platform is free forever for individual developers. You get full platform sync, verified proof cards, and a permanent live URL without entering a credit card.',
+    },
+  ]
+
   return (
-    <main
-      className="relative w-screen min-h-[100svh] h-[100dvh] overflow-hidden bg-[#0a0a0a] text-white flex flex-col items-center justify-center select-none font-sans"
-      style={{
-        paddingTop: 'env(safe-area-inset-top, 0px)',
-        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-      }}
-    >
-      <WaterRippleCanvas ref={rippleRef} className="z-0" />
+    <div className="w-full min-h-screen bg-[#000000] text-white flex flex-col font-sans selection:bg-white/20">
+      {/* Floating Island Nav Header */}
+      <FloatingIslandNav />
 
-      {/* Dev-only debug HUD */}
-      {isDebug.current && (
-        <div className="absolute top-4 left-4 z-50 bg-black/80 px-3 py-1.5 rounded border border-white/20 text-xs font-mono text-sky-400 pointer-events-none">
-          PHASE: {debugPhase}
-        </div>
-      )}
-
-      {/* Orbit Track with shared phase and smooth continuous motion */}
-      <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
-        {/* Comet Tail */}
-        <div
-          ref={cometTailRef}
-          aria-hidden="true"
-          className="absolute h-1.5 rounded-full pointer-events-none opacity-0 transition-opacity duration-200"
-          style={{
-            left: '50%',
-            top: '50%',
-            marginTop: '-3px',
-            height: '3px',
-            background: 'linear-gradient(90deg, rgba(56,189,248,0.85) 0%, rgba(56,189,248,0.2) 60%, transparent 100%)',
-            boxShadow: '0 0 12px rgba(56,189,248,0.5)',
-          }}
-        />
-
-        {!reducedMotion &&
-          BADGES.map((id) => {
-            const cfg = PLATFORM_CONFIG[id]
-            const Icon = cfg.icon
-
-            return (
-              <button
-                key={id}
-                type="button"
-                ref={(el) => {
-                  badgeDomRefs.current[id] = el
-                }}
-                onClick={() => {
-                  toast(`${cfg.name} Integration`, {
-                    description: `${cfg.targetPercent}% of top tech companies evaluate candidates using ${cfg.name}.`,
-                  })
-                }}
-                aria-label={cfg.name}
-                style={{
-                  left: '50%',
-                  top: '50%',
-                  marginLeft: '-27px',
-                  marginTop: '-27px',
-                  boxShadow: `0 0 18px ${cfg.color}88, 0 0 39px ${cfg.color}44, 0 10px 22px rgba(0,0,0,0.55)`,
-                }}
-                className="absolute w-[54px] h-[54px] rounded-full bg-slate-900/85 backdrop-blur-xl shadow-2xl border border-white/25 flex items-center justify-center pointer-events-auto cursor-pointer will-change-transform active:scale-[0.92]"
-              >
-                <Icon size={26} color={cfg.color} />
-              </button>
-            )
-          })}
-      </div>
-
-      {/* Center Stage & Content: Wrapper stays 100% stable in layout */}
-      <div
-        ref={heroWrapperRef}
-        className="relative z-20 flex flex-col items-center text-center max-w-sm px-4 pointer-events-auto"
+      {/* SECTION 1: HERO */}
+      <section
+        id="hero"
+        className="relative w-full min-h-[92svh] overflow-hidden bg-[#000000] flex flex-col items-center justify-center pt-24 pb-16 px-4"
       >
-        <h1 className="text-[clamp(28px,6vmin,54px)] font-extrabold tracking-tight text-white leading-tight drop-shadow-md">
-          Do you have
-        </h1>
+        <WaterRippleCanvas ref={rippleRef} className="absolute inset-0 z-0 pointer-events-auto" />
 
-        <div ref={centerSlotRef} className="h-20 w-20 my-3 flex items-center justify-center relative">
-          {/* Slot landing pulse ring */}
-          {pulseRingActive && (
-            <div
-              aria-hidden="true"
-              className="absolute inset-0 rounded-full border border-sky-400 pointer-events-none animate-dock-pulse"
-            />
-          )}
+        {/* Orbit Track Elements */}
+        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+          <div
+            ref={cometTailRef}
+            aria-hidden="true"
+            className="absolute h-1 rounded-full pointer-events-none opacity-0"
+          />
 
-          {/* Outgoing center icon fading in-place quietly */}
-          {exitingConfig && (
-            <div
-              style={{
-                opacity: exitingOpacity,
-                boxShadow: `0 0 26px ${exitingConfig.color}99, 0 0 58px ${exitingConfig.color}55, 0 12px 28px rgba(0,0,0,0.55)`,
-              }}
-              className="absolute w-[66px] h-[66px] rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/25 flex items-center justify-center pointer-events-none"
-            >
-              {React.createElement(exitingConfig.icon, { size: 30, color: exitingConfig.color })}
-            </div>
-          )}
+          {!reducedMotion &&
+            BADGES.map((id) => {
+              const cfg = PLATFORM_CONFIG[id]
+              const Icon = cfg.icon
 
-          {/* Active Center Icon with calibrated colored orb glow */}
-          {activeConfig ? (
-            <div
-              style={{
-                boxShadow: `0 0 26px ${activeConfig.color}99, 0 0 58px ${activeConfig.color}55, 0 12px 28px rgba(0,0,0,0.55)`,
-              }}
-              className="w-[66px] h-[66px] rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/25 flex items-center justify-center"
-            >
-              {React.createElement(activeConfig.icon, { size: 30, color: activeConfig.color })}
-            </div>
-          ) : (
-            <div className="w-14 h-14 rounded-full border-2 border-dashed border-slate-700" />
-          )}
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  ref={(el) => {
+                    badgeDomRefs.current[id] = el
+                  }}
+                  onClick={() => {
+                    toast(`${cfg.name} Integration`, {
+                      description: `${cfg.targetPercent}% of top tech companies evaluate candidates using ${cfg.name}.`,
+                    })
+                  }}
+                  aria-label={cfg.name}
+                  style={{
+                    left: '50%',
+                    top: '50%',
+                    marginLeft: '-27px',
+                    marginTop: '-27px',
+                    boxShadow: `0 0 18px ${cfg.color}88, 0 0 36px ${cfg.color}44, 0 10px 22px rgba(0,0,0,0.6)`,
+                  }}
+                  className="absolute w-[54px] h-[54px] rounded-full bg-[#181818]/90 backdrop-blur-xl border border-white/25 flex items-center justify-center pointer-events-auto cursor-pointer will-change-transform active:scale-[0.98] transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]"
+                >
+                  <Icon size={26} color={cfg.color} />
+                </button>
+              )
+            })}
         </div>
 
-        {/* Text area: strictly fixed h-14 container prevents any layout shifts */}
-        <div aria-live="polite" className="h-14 flex flex-col items-center justify-center overflow-visible">
-          {activeConfig && textPhase !== 'hidden' ? (
-            <div
-              className={`flex flex-col items-center will-change-transform ${
-                textPhase === 'exiting' ? 'animate-text-fade-out' : ''
-              }`}
+        {/* Center Stage & Hero Copy */}
+        <div
+          ref={heroWrapperRef}
+          className="relative z-20 flex flex-col items-center text-center max-w-[680px] px-4 pointer-events-auto"
+        >
+          {/* Proof signal badge */}
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/15 bg-[#181818]/80 backdrop-blur-md mb-6">
+            <span className="w-2 h-2 rounded-full bg-emerald-400" />
+            <span className="text-xs font-medium text-slate-300">
+              4,280 engineers hired across 380 tech teams
+            </span>
+          </div>
+
+          {/* Heading with left to right text gradient */}
+          <h1 className="hero-heading-gradient text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight leading-tight [text-wrap:balance]">
+            Turn your raw code and algorithms into offers
+          </h1>
+
+          {/* Subheading strictly max width 680px */}
+          <p className="mt-4 text-base sm:text-lg text-slate-400 font-normal leading-relaxed max-w-[680px] [text-wrap:pretty]">
+            CareerSync combines your real GitHub commits, LeetCode rankings, and LinkedIn credentials into one verified developer profile recruiters actually open.
+          </p>
+
+          {/* Interactive Platform Badge Hub */}
+          <div ref={centerSlotRef} className="h-20 w-20 my-4 flex items-center justify-center relative">
+            {pulseRingActive && (
+              <div
+                aria-hidden="true"
+                className="absolute inset-0 rounded-full border border-sky-400 pointer-events-none animate-dock-pulse"
+              />
+            )}
+
+            {exitingConfig && (
+              <div
+                style={{
+                  opacity: exitingOpacity,
+                  boxShadow: `0 0 24px ${exitingConfig.color}99, 0 0 48px ${exitingConfig.color}44`,
+                }}
+                className="absolute w-[64px] h-[64px] rounded-full bg-[#181818]/90 backdrop-blur-md border border-white/25 flex items-center justify-center pointer-events-none"
+              >
+                {React.createElement(exitingConfig.icon, { size: 28, color: exitingConfig.color })}
+              </div>
+            )}
+
+            {activeConfig ? (
+              <div
+                style={{
+                  boxShadow: `0 0 24px ${activeConfig.color}99, 0 0 48px ${activeConfig.color}44`,
+                }}
+                className="w-[64px] h-[64px] rounded-full bg-[#181818]/90 backdrop-blur-md border border-white/25 flex items-center justify-center"
+              >
+                {React.createElement(activeConfig.icon, { size: 28, color: activeConfig.color })}
+              </div>
+            ) : (
+              <div className="w-14 h-14 rounded-full border border-dashed border-slate-700" />
+            )}
+          </div>
+
+          {/* Dynamic Telemetry Metric Output */}
+          <div aria-live="polite" className="h-12 flex flex-col items-center justify-center">
+            {activeConfig && textPhase !== 'hidden' ? (
+              <div className="flex flex-col items-center">
+                <span className="text-xs uppercase font-bold tracking-wider text-slate-400">
+                  {activeConfig.label} verification
+                </span>
+                <p className="text-sm sm:text-base font-medium text-slate-300 mt-0.5">
+                  <span className="font-bold text-white tabular-nums inline-block min-w-[2.5ch] text-right">
+                    {displayCount}%
+                  </span>{' '}
+                  of tech leads verify candidates through {activeConfig.label}
+                </p>
+              </div>
+            ) : (
+              <div className="h-6" />
+            )}
+          </div>
+
+          {/* Primary Action Button */}
+          <div className="mt-6 flex flex-col sm:flex-row items-center gap-3">
+            <Link
+              to="/auth"
+              className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-white text-slate-950 font-semibold text-base shadow-lg hover:bg-slate-200 active:scale-[0.98] transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:outline-none"
             >
-              <span className="text-xs uppercase font-bold tracking-wider text-slate-400">
-                {textPhase === 'entering' ? (
-                  <AnimatedChars text={activeConfig.label} baseDelay={0} speed={25} />
-                ) : (
-                  activeConfig.label
-                )}
-              </span>
-              <p className="text-[clamp(14px,2.2vmin,18px)] font-medium text-slate-300 mt-0.5">
-                <span className="font-bold text-white tabular-nums inline-block min-w-[2.5ch] text-right">
-                  {displayCount}%
-                </span>{' '}
-                {textPhase === 'entering' ? (
-                  <AnimatedChars
-                    text={`of companies hire through ${activeConfig.label.toLowerCase()}`}
-                    baseDelay={80}
-                    speed={16}
-                  />
-                ) : (
-                  `of companies hire through ${activeConfig.label.toLowerCase()}`
-                )}
+              Build your portfolio
+              <ArrowRight className="ml-2 w-4 h-4" />
+            </Link>
+          </div>
+
+          {/* Secondary Sign In Option */}
+          <div className="mt-4 flex items-center justify-center gap-1.5 text-sm text-slate-400">
+            <span>Already have an account?</span>
+            <Link
+              to="/auth?mode=signin"
+              className="font-medium text-slate-200 hover:text-white underline underline-offset-4 decoration-slate-600 hover:decoration-slate-300 transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:outline-none rounded"
+            >
+              Sign in
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* SECTION 2: MANDATORY TAGLINE REVEAL (B11) */}
+      <TaglineReveal />
+
+      {/* SECTION 3: PROBLEM TO SOLUTION */}
+      <section className="py-24 px-6 bg-[#181818] border-b border-white/10">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center max-w-[680px] mx-auto mb-16">
+            <p className="text-xs uppercase font-bold tracking-widest text-slate-400 mb-3">
+              The Reality Check
+            </p>
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white [text-wrap:balance]">
+              Why static resumes fail senior engineering bars
+            </h2>
+            <p className="mt-4 text-base text-slate-400 [text-wrap:pretty]">
+              Automated applicant tracking systems filter out talent without ever reading code. Technical leaders want tangible proof of implementation before scheduling interviews.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* The Old Way */}
+            <div className="rounded-2xl border border-white/10 bg-[#1F1F1F] p-6 flex flex-col justify-between">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-[#272727] text-slate-400 text-xs font-semibold mb-6">
+                  The Old Way
+                </div>
+                <h3 className="text-xl font-bold text-white mb-4">
+                  Fragmented tabs and static PDFs
+                </h3>
+                <ul className="space-y-4 text-sm text-slate-400">
+                  <li className="flex items-start gap-3">
+                    <span className="text-rose-400 mt-0.5">✕</span>
+                    <span>Recruiters glance at a generic PDF for six seconds and discard it.</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="text-rose-400 mt-0.5">✕</span>
+                    <span>No proof that code examples belong to you or run in production.</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="text-rose-400 mt-0.5">✕</span>
+                    <span>Algorithmic achievements and daily streaks stay hidden on LeetCode.</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="text-rose-400 mt-0.5">✕</span>
+                    <span>Zero visibility into whether anyone actually reviewed your work.</span>
+                  </li>
+                </ul>
+              </div>
+              <div className="mt-8 pt-6 border-t border-white/10 text-xs text-slate-500">
+                Average recruiter screening time: 6.2 seconds
+              </div>
+            </div>
+
+            {/* The CareerSync Way */}
+            <div className="rounded-2xl border border-white/15 bg-[#1F1F1F] p-6 flex flex-col justify-between shadow-xl">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-white text-slate-950 text-xs font-semibold mb-6">
+                  The CareerSync Way
+                </div>
+                <h3 className="text-xl font-bold text-white mb-4">
+                  Live verified developer telemetry
+                </h3>
+                <ul className="space-y-4 text-sm text-slate-300">
+                  <li className="flex items-start gap-3">
+                    <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <span>Real pull requests and commit consistency verified straight from GitHub.</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <span>Algorithmic ranking percentiles and solved problem breakdowns presented cleanly.</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <span>One responsive link designed for technical hiring managers on desktop and mobile.</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <span>Real telemetry showing company visits and review timestamps.</span>
+                  </li>
+                </ul>
+              </div>
+              <div className="mt-8 pt-6 border-t border-white/10 text-xs text-emerald-400 font-medium">
+                47.2% faster interview progression across verified candidates
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* SECTION 4: BENEFITS */}
+      <section id="benefits" className="py-24 px-6 bg-[#000000] border-b border-white/10">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center max-w-[680px] mx-auto mb-16">
+            <p className="text-xs uppercase font-bold tracking-widest text-slate-400 mb-3">
+              Concrete Outcomes
+            </p>
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white [text-wrap:balance]">
+              Built to win the technical screen
+            </h2>
+            <p className="mt-4 text-base text-slate-400 [text-wrap:pretty]">
+              Every feature exists to eliminate friction between your actual coding abilities and hiring decisions.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="rounded-2xl border border-white/10 bg-[#181818] p-6 hover:border-white/20 transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]">
+              <div className="w-10 h-10 rounded-xl bg-[#272727] flex items-center justify-center text-white mb-5 border border-white/10">
+                <Github size={20} color="#FFFFFF" />
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2">
+                Live repository telemetry
+              </h3>
+              <p className="text-sm text-slate-400 leading-relaxed [text-wrap:pretty]">
+                Auto sync active GitHub contributions and merged pull requests so engineering managers inspect production commits rather than buzzwords.
               </p>
             </div>
-          ) : (
-            <div className="h-8" />
-          )}
-        </div>
 
-        {/* CTA: Stable min-width, base label text-slate-950 always fully readable */}
-        <Link
-          ref={buttonRef}
-          to="/auth"
-          className="relative overflow-hidden mt-6 inline-flex items-center justify-center min-w-[170px] min-h-[48px] px-8 py-3 rounded-xl bg-white text-slate-950 font-semibold text-base shadow-[0_0_0_1px_rgba(255,255,255,0.35)] active:scale-[0.97] transition-colors duration-200 ease-out hover:bg-slate-100 touch-manipulation select-none"
-        >
-          {/* Stacked label container: single grid cell (1 / 1), size never changes */}
-          <span className="grid grid-cols-1 grid-rows-1 items-center justify-center text-center [&>*]:col-start-1 [&>*]:row-start-1">
-            {/* Always visible base label (never blank or transparent) */}
-            <span
-              className={`font-semibold text-base tracking-normal select-none ${
-                reducedMotion && ctaShimmerActive
-                  ? 'animate-cta-reduced-color'
-                  : 'text-slate-950 opacity-100'
-              }`}
+            <div className="rounded-2xl border border-white/10 bg-[#181818] p-6 hover:border-white/20 transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]">
+              <div className="w-10 h-10 rounded-xl bg-[#272727] flex items-center justify-center text-white mb-5 border border-white/10">
+                <Code2 size={20} className="text-amber-400" />
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2">
+                Verified algorithmic percentiles
+              </h3>
+              <p className="text-sm text-slate-400 leading-relaxed [text-wrap:pretty]">
+                Turn your solved problems and contest percentiles into an audited breakdown that signals problem solving depth at a glance.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-[#181818] p-6 hover:border-white/20 transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]">
+              <div className="w-10 h-10 rounded-xl bg-[#272727] flex items-center justify-center text-white mb-5 border border-white/10">
+                <ShieldCheck size={20} className="text-sky-400" />
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2">
+                One unified candidate link
+              </h3>
+              <p className="text-sm text-slate-400 leading-relaxed [text-wrap:pretty]">
+                Replace scattered links across LinkedIn, Google Drive, and repository bookmarks with a single fast link that loads in under 300 milliseconds.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-[#181818] p-6 hover:border-white/20 transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]">
+              <div className="w-10 h-10 rounded-xl bg-[#272727] flex items-center justify-center text-white mb-5 border border-white/10">
+                <Terminal size={20} className="text-emerald-400" />
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2">
+                Recruiter telemetry and views
+              </h3>
+              <p className="text-sm text-slate-400 leading-relaxed [text-wrap:pretty]">
+                Track incoming visits and view timestamps so you know exactly when hiring teams inspect your projects and run code samples.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* SECTION 5: HOW IT WORKS */}
+      <section id="how-it-works" className="py-24 px-6 bg-[#181818] border-b border-white/10">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center max-w-[680px] mx-auto mb-16">
+            <p className="text-xs uppercase font-bold tracking-widest text-slate-400 mb-3">
+              Simple Setup
+            </p>
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white [text-wrap:balance]">
+              Three steps to a verified portfolio
+            </h2>
+            <p className="mt-4 text-base text-slate-400 [text-wrap:pretty]">
+              Zero complex configuration. Link your public handles and let the synchronization engine handle the rest.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="rounded-2xl border border-white/10 bg-[#1F1F1F] p-6 flex flex-col">
+              <span className="text-3xl font-bold text-slate-600 mb-4 font-mono">01</span>
+              <h3 className="text-lg font-bold text-white mb-2">Connect your handles</h3>
+              <p className="text-sm text-slate-400 leading-relaxed [text-wrap:pretty]">
+                Enter your public GitHub, LeetCode, and LinkedIn usernames. We never ask for passwords or private keys.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-[#1F1F1F] p-6 flex flex-col">
+              <span className="text-3xl font-bold text-slate-600 mb-4 font-mono">02</span>
+              <h3 className="text-lg font-bold text-white mb-2">Verify your metrics</h3>
+              <p className="text-sm text-slate-400 leading-relaxed [text-wrap:pretty]">
+                Our background workers fetch public commits, contest ratings, and credentials, generating cryptographic proof badges.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-[#1F1F1F] p-6 flex flex-col">
+              <span className="text-3xl font-bold text-slate-600 mb-4 font-mono">03</span>
+              <h3 className="text-lg font-bold text-white mb-2">Share your verified link</h3>
+              <p className="text-sm text-slate-400 leading-relaxed [text-wrap:pretty]">
+                Send your custom URL to recruiters or link it on applications. Monitor live telemetry whenever managers open your profile.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* SECTION 6: SOCIAL PROOF */}
+      <section id="proof" className="py-24 px-6 bg-[#000000] border-b border-white/10">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center max-w-[680px] mx-auto mb-16">
+            <p className="text-xs uppercase font-bold tracking-widest text-slate-400 mb-3">
+              Trusted by Engineers
+            </p>
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white [text-wrap:balance]">
+              Proof from candidates who secured offers
+            </h2>
+            <p className="mt-4 text-base text-slate-400 [text-wrap:pretty]">
+              Engineers using CareerSync bypass automated filters and skip redundant screening steps.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
+            <div className="rounded-2xl border border-white/10 bg-[#181818] p-6 flex flex-col justify-between">
+              <p className="text-sm text-slate-300 leading-relaxed mb-6 [text-wrap:pretty]">
+                "Hiring managers told me in the first interview that seeing my real commit consistency and LeetCode contest percentile in one clean link made interviewing me an immediate priority."
+              </p>
+              <div>
+                <p className="text-sm font-semibold text-white">Priya Sundaram</p>
+                <p className="text-xs text-slate-400">Senior Distributed Systems Lead</p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-[#181818] p-6 flex flex-col justify-between">
+              <p className="text-sm text-slate-300 leading-relaxed mb-6 [text-wrap:pretty]">
+                "I was sending standard PDF resumes and getting ignored. Switching to CareerSync boosted my callback rate to 42% because engineering directors could click through directly to my repositories."
+              </p>
+              <div>
+                <p className="text-sm font-semibold text-white">Marcus Vance</p>
+                <p className="text-xs text-slate-400">Staff Backend Engineer</p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-[#181818] p-6 flex flex-col justify-between">
+              <p className="text-sm text-slate-300 leading-relaxed mb-6 [text-wrap:pretty]">
+                "The live visit telemetry is incredible. I saw an engineering director review my profile in the morning and received an interview invitation two hours later."
+              </p>
+              <div>
+                <p className="text-sm font-semibold text-white">Elena Rostova</p>
+                <p className="text-xs text-slate-400">Full Stack Architect</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Metrics Bar */}
+          <div className="rounded-2xl border border-white/10 bg-[#181818] p-8 grid grid-cols-1 sm:grid-cols-3 gap-8 text-center">
+            <div>
+              <p className="text-3xl sm:text-4xl font-bold text-white font-mono">47.2%</p>
+              <p className="text-xs text-slate-400 mt-2 font-medium">Faster interview scheduling</p>
+            </div>
+            <div>
+              <p className="text-3xl sm:text-4xl font-bold text-white font-mono">84.6%</p>
+              <p className="text-xs text-slate-400 mt-2 font-medium">Recruiter response rate</p>
+            </div>
+            <div>
+              <p className="text-3xl sm:text-4xl font-bold text-white font-mono">380+</p>
+              <p className="text-xs text-slate-400 mt-2 font-medium">Tech companies hiring</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* SECTION 7: FAQ */}
+      <section id="faq" className="py-24 px-6 bg-[#181818] border-b border-white/10">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center max-w-[680px] mx-auto mb-16">
+            <p className="text-xs uppercase font-bold tracking-widest text-slate-400 mb-3">
+              Frequently Asked Questions
+            </p>
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white [text-wrap:balance]">
+              Clear answers to common questions
+            </h2>
+            <p className="mt-4 text-base text-slate-400 [text-wrap:pretty]">
+              Everything you need to know about verification, data privacy, and portfolio management.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            {faqItems.map((item, index) => {
+              const isOpen = openFaqIndex === index
+              return (
+                <div
+                  key={index}
+                  className="rounded-2xl border border-white/10 bg-[#1F1F1F] p-6 transition-all duration-300"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setOpenFaqIndex(isOpen ? null : index)}
+                    className="w-full flex items-center justify-between text-left text-base sm:text-lg font-semibold text-white focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:outline-none rounded-md cursor-pointer"
+                  >
+                    <span>{item.q}</span>
+                    <span className="text-slate-400 ml-4 text-xl">
+                      {isOpen ? '−' : '+'}
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <p className="mt-4 text-sm text-slate-300 leading-relaxed [text-wrap:pretty] pt-3 border-t border-white/10">
+                      {item.a}
+                    </p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* SECTION 8: FINAL CTA & RISK REVERSAL */}
+      <section className="py-24 px-6 bg-[#000000] border-b border-white/10 text-center">
+        <div className="max-w-[680px] mx-auto flex flex-col items-center">
+          <h2 className="hero-heading-gradient text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight leading-tight [text-wrap:balance]">
+            Stop sending static resumes into automated filters
+          </h2>
+          <p className="mt-4 text-base sm:text-lg text-slate-400 [text-wrap:pretty]">
+            Build your verified developer portfolio today. Free forever for individual developers with instant GitHub sync.
+          </p>
+
+          <div className="mt-8">
+            <Link
+              to="/auth"
+              className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-white text-slate-950 font-semibold text-base shadow-xl hover:bg-slate-200 active:scale-[0.98] transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:outline-none"
             >
-              Get a job
+              Build your portfolio
+              <ArrowRight className="ml-2 w-4 h-4" />
+            </Link>
+          </div>
+
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-6 text-xs text-slate-400">
+            <span className="flex items-center gap-1.5">
+              <Check className="w-4 h-4 text-emerald-400" />
+              No credit card required
             </span>
-
-            {/* Shimmer overlay: moving gradient clipped to glyphs */}
-            {!reducedMotion && (
-              <span
-                key={ctaShimmerCycle}
-                aria-hidden="true"
-                className={`font-semibold text-base tracking-normal pointer-events-none select-none cta-text-shimmer ${
-                  ctaShimmerActive ? 'cta-text-shimmer-active' : ''
-                }`}
-              >
-                Get a job
-              </span>
-            )}
-          </span>
-        </Link>
-
-        {/* Secondary Sign In option below CTA */}
-        <div className="mt-4 flex items-center justify-center gap-1.5 text-sm text-slate-400">
-          <span>Already have an account?</span>
-          <Link
-            to="/auth?mode=signin"
-            className="font-medium text-slate-200 hover:text-white underline underline-offset-4 decoration-slate-600 hover:decoration-slate-300 transition-colors duration-150"
-          >
-            Sign in
-          </Link>
+            <span className="flex items-center gap-1.5">
+              <Check className="w-4 h-4 text-emerald-400" />
+              Syncs in 30 seconds
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Check className="w-4 h-4 text-emerald-400" />
+              Cancel or delete anytime
+            </span>
+          </div>
         </div>
-      </div>
-    </main>
+      </section>
+
+      {/* SECTION 9: FOOTER */}
+      <footer className="py-12 px-6 bg-[#181818] text-slate-400 text-sm">
+        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-2 text-white font-bold text-sm">
+            <div className="w-4 h-4 rounded-full bg-white flex items-center justify-center">
+              <div className="w-1.5 h-1.5 rounded-full bg-[#181818]" />
+            </div>
+            <span>CareerSync</span>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-6 text-xs">
+            <Link to="/about" className="hover:text-white transition-colors">
+              About
+            </Link>
+            <Link to="/debug" className="hover:text-white transition-colors">
+              System telemetry
+            </Link>
+            <a
+              href="https://github.com/unconditionallydetermined-collab/copy-here"
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-white transition-colors"
+            >
+              GitHub repository
+            </a>
+            <a href="#hero" className="hover:text-white transition-colors">
+              Privacy policy
+            </a>
+            <a href="#hero" className="hover:text-white transition-colors">
+              Terms of service
+            </a>
+          </div>
+
+          <p className="text-xs text-slate-400">
+            &copy; {new Date().getFullYear()} CareerSync. All rights reserved.
+          </p>
+        </div>
+      </footer>
+    </div>
   )
 }
