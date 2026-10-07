@@ -35,6 +35,9 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
     triggerSlam: (clientX, clientY, options = {}) => {
       triggerSlamInternal(clientX, clientY, options)
     },
+    triggerReverseWave: (clientX, clientY, options = {}) => {
+      triggerReverseWaveInternal(clientX, clientY, options)
+    },
     displaceAt: (clientX, clientY, force = 12) => {
       displaceAtCoord(clientX, clientY, Math.min(force, 15))
       const now = performance.now()
@@ -98,6 +101,37 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
         dot.vx += (dx / dist) * factor
         dot.vy += (dy / dist) * factor
       }
+    }
+  }
+
+  const triggerReverseWaveInternal = (clientX, clientY, options = {}) => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const rect = canvas.getBoundingClientRect()
+    const x = clientX !== undefined ? clientX - rect.left : rect.width / 2
+    const y = clientY !== undefined ? clientY - rect.top : rect.height / 2
+
+    const intensity = options.intensity ?? 125
+    const waveSpeed = options.speed ?? 290
+    const waveWidth = options.width ?? 65
+    const startRadius = Math.min(420, options.startRadius ?? 360)
+
+    wavesRef.current.push({
+      x,
+      y,
+      radius: startRadius,
+      speed: waveSpeed,
+      maxRadius: startRadius,
+      intensity,
+      width: waveWidth,
+      life: 1.2,
+      decay: 0.95,
+      reverse: true,
+      onComplete: options.onComplete,
+    })
+
+    if (intensity >= 100) {
+      triggerHaptic([40, 30, 80])
     }
   }
 
@@ -307,12 +341,18 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
       const currentC = isDampingBoosted ? BASE_C * 2.1 : BASE_C
       const currentK = BASE_K
 
-      // 1. Advance waves
+      // 1. Advance waves (both outward splash and inward reverse wave)
       for (let i = waves.length - 1; i >= 0; i--) {
         const w = waves[i]
-        w.radius += w.speed * dt
+        const isReverse = !!w.reverse
+
+        if (isReverse) {
+          w.radius -= w.speed * dt
+        } else {
+          w.radius += w.speed * dt
+        }
         w.life -= dt * w.decay
-        w.intensity *= Math.exp(-2.2 * dt)
+        w.intensity *= Math.exp(-1.8 * dt)
 
         const waveFrontWidth = w.width
         const rMin = Math.max(0, w.radius - waveFrontWidth)
@@ -333,12 +373,21 @@ const WaterRippleCanvas = forwardRef(function WaterRippleCanvas(
             const distanceAttenuation = 1 / (1 + dist * 0.004)
             const impulse = w.intensity * radialFalloff * distanceAttenuation
 
-            dot.vx += (dx / dist) * impulse * dt * 26
-            dot.vy += (dy / dist) * impulse * dt * 26
+            // Outward or inward impulse direction
+            const dirMultiplier = isReverse ? -1 : 1
+            dot.vx += (dx / dist) * impulse * dt * 26 * dirMultiplier
+            dot.vy += (dy / dist) * impulse * dt * 26 * dirMultiplier
           }
         }
 
-        if (w.life <= 0 || w.intensity < 0.2 || w.radius > w.maxRadius) {
+        const isFinished = isReverse
+          ? w.radius <= 10 || w.life <= 0
+          : w.life <= 0 || w.intensity < 0.2 || w.radius > w.maxRadius
+
+        if (isFinished) {
+          if (typeof w.onComplete === 'function') {
+            try { w.onComplete() } catch {}
+          }
           waves.splice(i, 1)
         }
       }

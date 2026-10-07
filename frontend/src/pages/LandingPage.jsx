@@ -141,6 +141,7 @@ export default function LandingPage() {
   const [ctaShimmerActive, setCtaShimmerActive] = useState(false)
   const [ctaShimmerCycle, setCtaShimmerCycle] = useState(0)
   const [pulseRingActive, setPulseRingActive] = useState(false)
+  const [centerIsCta, setCenterIsCta] = useState(false)
   const [centerCoords, setCenterCoords] = useState({ x: 0, y: 0 })
 
   const heroWrapperRef = useRef(null)
@@ -268,7 +269,7 @@ export default function LandingPage() {
       maxX = slotCenterX + 40; maxY = slotCenterY + 40
     }
 
-    const slotRadius = 33
+    const slotRadius = 43
     const minClearR = slotRadius + iconRadius + pad + 20
 
     // Smallest circle centered on the center icon that stays outside the
@@ -563,25 +564,56 @@ export default function LandingPage() {
 
         case 'IMPACT': {
           if (timeInPhase >= 80) {
-            state.phase = 'SETTLE'
+            state.phase = 'WAVE_OUT'
             state.phaseStartTime = now
           }
           break
         }
 
-        case 'SETTLE': {
+        case 'WAVE_OUT': {
           state.currentSpeed = 0
-          // Re-materialize previous active badge in its vacated slot (0 -> 0.5 over 500ms)
-          if (timeInPhase >= 300) {
-            const retP = Math.min(1, (timeInPhase - 300) / 500)
-            state.returningOpacity = 0.5 * retP
+          // Outward ripple wave travels for ~650ms to maxRadius and stops
+          if (timeInPhase >= 650) {
+            state.phase = 'WAVE_WAIT'
+            state.phaseStartTime = now
+          }
+          break
+        }
+
+        case 'WAVE_WAIT': {
+          state.currentSpeed = 0
+          // Wait 1 second (1000ms) after wave stops
+          if (timeInPhase >= 1000) {
+            state.phase = 'WAVE_REV'
+            state.phaseStartTime = now
+
+            // Trigger inward reverse wave
+            if (rippleRef.current?.triggerReverseWave) {
+              rippleRef.current.triggerReverseWave(geom.slotCenterX, geom.slotCenterY, {
+                intensity: 130,
+                speed: 340,
+                width: 65,
+                startRadius: 420,
+              })
+            }
+          }
+          break
+        }
+
+        case 'WAVE_REV': {
+          state.currentSpeed = 0
+          const revDuration = 750
+          const revP = Math.min(1, timeInPhase / revDuration)
+
+          // Synced return: returning badge fades smoothly 0 -> 0.85 synchronized with reverse wave
+          state.returningOpacity = 0.85 * (1 - Math.cos(revP * Math.PI)) / 2
+
+          // When reverse wave reaches center, center morphs into CTA button
+          if (revP >= 0.85 && !centerIsCta) {
+            setCenterIsCta(true)
           }
 
-          const minMet = timeInPhase >= 700
-          const maxMet = timeInPhase >= 2200
-          const isCanvasSettled = rippleRef.current ? rippleRef.current.isSettled() : true
-
-          if ((minMet && isCanvasSettled) || maxMet) {
+          if (revP >= 1) {
             state.phase = 'READ'
             state.phaseStartTime = now
             setTextPhase('entering')
@@ -646,6 +678,7 @@ export default function LandingPage() {
           state.sharedPhase = (state.sharedPhase + state.currentSpeed * dt) % (2 * Math.PI)
 
           if (wakeP >= 1) {
+            setCenterIsCta(false)
             state.phase = 'HOLD'
             state.phaseStartTime = now
             setTextPhase('idle')
@@ -723,7 +756,7 @@ export default function LandingPage() {
         } else if (isIncoming && state.phase === 'COMET') {
           op = 1.0
           sc = p.scale
-        } else if (isReturning && state.phase === 'SETTLE') {
+        } else if (isReturning && (state.phase === 'SETTLE' || state.phase === 'WAVE_REV' || state.phase === 'WAVE_WAIT' || state.phase === 'WAVE_OUT')) {
           op = state.returningOpacity
         }
 
@@ -869,8 +902,8 @@ export default function LandingPage() {
           </h1>
         </div>
 
-        {/* 2. Center orb slot with stat caption under it */}
-        <div ref={centerSlotRef} className="h-20 w-20 my-3 flex items-center justify-center relative">
+        {/* 2. Center orb slot with stat caption under it (1.3x larger = 86px, morphs into CTA button on reverse wave) */}
+        <div ref={centerSlotRef} className="min-h-[96px] min-w-[96px] my-3 flex items-center justify-center relative">
           {pulseRingActive && (
             <div
               aria-hidden="true"
@@ -879,30 +912,40 @@ export default function LandingPage() {
           )}
 
           {/* Outgoing center icon fading in-place */}
-          {exitingConfig && (
+          {exitingConfig && !centerIsCta && (
             <div
               style={{
                 opacity: exitingOpacity,
-                boxShadow: `0 0 26px ${exitingConfig.color}99, 0 0 58px ${exitingConfig.color}55, 0 12px 28px rgba(0,0,0,0.55)`,
+                boxShadow: `0 0 32px ${exitingConfig.color}99, 0 0 68px ${exitingConfig.color}55, 0 14px 32px rgba(0,0,0,0.55)`,
               }}
-              className="absolute w-[66px] h-[66px] rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/25 flex items-center justify-center pointer-events-none"
+              className="absolute w-[86px] h-[86px] rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/25 flex items-center justify-center pointer-events-none"
             >
-              {React.createElement(exitingConfig.icon, { size: 30, color: exitingConfig.color })}
+              {React.createElement(exitingConfig.icon, { size: 39, color: exitingConfig.color })}
             </div>
           )}
 
-          {/* Active Center Icon with calibrated colored orb glow */}
-          {activeConfig ? (
+          {/* Center morphs into CTA button when reverse wave shrinks down */}
+          {centerIsCta ? (
+            <Link
+              to="/auth"
+              className="relative overflow-hidden inline-flex items-center justify-center min-w-[210px] min-h-[52px] px-8 py-3.5 rounded-2xl bg-white text-slate-950 font-bold text-base shadow-[0_0_35px_rgba(255,255,255,0.45)] active:scale-[0.97] transition-all duration-300 ease-out touch-manipulation select-none"
+            >
+              <span className="flex items-center gap-2">
+                {activeConfig && React.createElement(activeConfig.icon, { size: 22, color: '#0f172a' })}
+                <span className="text-slate-950 font-semibold tracking-normal">Get a job you'll love</span>
+              </span>
+            </Link>
+          ) : activeConfig ? (
             <div
               style={{
-                boxShadow: `0 0 26px ${activeConfig.color}99, 0 0 58px ${activeConfig.color}55, 0 12px 28px rgba(0,0,0,0.55)`,
+                boxShadow: `0 0 32px ${activeConfig.color}99, 0 0 68px ${activeConfig.color}55, 0 14px 32px rgba(0,0,0,0.55)`,
               }}
-              className="w-[66px] h-[66px] rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/25 flex items-center justify-center pointer-events-auto"
+              className="w-[86px] h-[86px] rounded-full bg-slate-900/90 backdrop-blur-md shadow-2xl border border-white/25 flex items-center justify-center pointer-events-auto transition-transform duration-300"
             >
-              {React.createElement(activeConfig.icon, { size: 30, color: activeConfig.color })}
+              {React.createElement(activeConfig.icon, { size: 39, color: activeConfig.color })}
             </div>
           ) : (
-            <div className="w-14 h-14 rounded-full border-2 border-dashed border-slate-700" />
+            <div className="w-16 h-16 rounded-full border-2 border-dashed border-slate-700" />
           )}
         </div>
 
