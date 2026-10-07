@@ -65,6 +65,7 @@ export default function LandingPage() {
   const heroWrapperRef = useRef(null)
   const centerSlotRef = useRef(null)
   const buttonRef = useRef(null)
+  const pulseTimerRef = useRef(null)
   const rippleRef = useRef(null)
   const badgeDomRefs = useRef({})
   const cometTailRef = useRef(null)
@@ -421,7 +422,8 @@ export default function LandingPage() {
 
             // Pulse ring at center slot
             setPulseRingActive(true)
-            setTimeout(() => setPulseRingActive(false), 600)
+            if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current)
+            pulseTimerRef.current = setTimeout(() => setPulseRingActive(false), 600)
           }
           break
         }
@@ -876,14 +878,14 @@ export default function LandingPage() {
         <Link
           ref={buttonRef}
           to="/auth"
-          className={`relative overflow-hidden mt-6 inline-flex items-center justify-center min-w-[170px] min-h-[48px] px-8 py-3 rounded-xl bg-white text-slate-950 font-semibold text-base shadow-xl shadow-black/50 active:scale-[0.97] transition-all duration-300 ease-out hover:bg-slate-100 touch-manipulation select-none border border-white/35 ${
-            ctaPulse ? 'animate-cta-pulse' : ''
+          className={`relative overflow-hidden mt-6 inline-flex items-center justify-center min-w-[170px] min-h-[48px] px-8 py-3 rounded-xl bg-white text-slate-950 font-semibold text-base cta-button-glow ring-1 ring-white/45 active:scale-[0.97] transition-[transform,background-color,box-shadow,border-color] duration-300 ease-out hover:bg-slate-100 hover:ring-white/70 hover:scale-[1.02] touch-manipulation select-none border border-white/35 ${
+            ctaPulse ? 'animate-cta-pulse ring-sky-400/60' : ''
           }`}
         >
           {/* Subtle light sweep */}
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 w-1/2 bg-gradient-to-r from-transparent via-black/10 to-transparent animate-btn-shimmer"
+            className="pointer-events-none absolute inset-0 w-1/2 bg-gradient-to-r from-transparent via-sky-400/20 to-transparent animate-btn-shimmer"
           />
 
           {/* Stacked label container: base label in text-slate-950 + dark shimmer overlay */}
@@ -904,6 +906,17 @@ export default function LandingPage() {
             </span>
           </div>
         </Link>
+
+        {/* Secondary Sign In option below CTA */}
+        <div className="mt-4 flex items-center justify-center gap-1.5 text-sm text-slate-400">
+          <span>Already have an account?</span>
+          <Link
+            to="/auth?mode=signin"
+            className="font-medium text-slate-200 hover:text-white underline underline-offset-4 decoration-slate-600 hover:decoration-slate-300 transition-colors duration-150"
+          >
+            Sign in
+          </Link>
+        </div>
       </div>
     </main>
   )
