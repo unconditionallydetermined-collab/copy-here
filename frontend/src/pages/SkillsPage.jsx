@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { skillsApi, resumeApi } from '../services/api'
-import { Plus, Pencil, Trash2, Zap, X, Loader2, FileText } from 'lucide-react'
+import { Plus, Pencil, Trash2, Zap, X, Loader2, FileText, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 
-const CATEGORIES = ['Frontend', 'Backend', 'Database', 'DevOps', 'Programming Language', 'Mobile', 'AI/ML', 'DSA', 'Tools', 'Other']
+const CATEGORIES = ['Programming Languages', 'Frontend Development', 'Backend Development', 'Databases & Storage', 'DevOps & Cloud', 'Testing & QA', 'AI, ML & Data', 'DSA & Fundamentals', 'Professional & Soft Skills', 'Tools & Utilities', 'Other']
 
 function SkillBar({ skill }) {
   const pct = skill.proficiency || 0
@@ -198,6 +198,14 @@ export default function SkillsPage() {
           </div>
         ))
       )}
+
+      {/* Platform honesty warning banner */}
+      <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 p-3.5 text-xs text-amber-900 flex items-start gap-2.5">
+        <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+        <p className="leading-relaxed">
+          <strong className="font-semibold text-amber-950">Placement & Academic Integrity:</strong> Adding false, exaggerated, or unverified skills may lead to blacklisting of your account by hiring partner companies and by the platform.
+        </p>
+      </div>
 
       {modal && (
         <SkillModal

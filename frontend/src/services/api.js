@@ -199,7 +199,6 @@ const performOnboardingHydration = async (onProgress) => {
       await profileApi.update({
         githubUsername: github?.username || '',
         leetcodeUsername: leetcode?.username || '',
-        linkedinUrl: linkedin?.url || '',
       })
       checkpoint('profileUpdated')
     }
@@ -213,14 +212,32 @@ const performOnboardingHydration = async (onProgress) => {
       await leetcodeApi.sync(leetcode.username)
       checkpoint('leetcodeSynced')
     }
-    if (linkedin?.url && !complete('linkedinSaved')) {
-      if (onProgress) onProgress('Saving LinkedIn profile...')
-      await linkedinApi.save({ profileUrl: linkedin.url })
-      checkpoint('linkedinSaved')
-    }
+    // Note: LinkedIn is no longer saved during onboarding; it is verified exclusively via screenshot in Profile Completion.
     if (Array.isArray(skills) && skills.length > 0 && !complete('skillsSaved')) {
-      if (onProgress) onProgress('Adding top skills...')
-      await skillsApi.addBatch(skills)
+      if (onProgress) onProgress('Adding assessed skills...')
+      for (const item of skills) {
+        if (typeof item === 'object' && item.skillName) {
+          try {
+            await skillsApi.add({
+              skillName: item.skillName,
+              category: item.category || 'Other',
+              proficiency: item.proficiency || 75,
+              yearsExperience: item.yearsExperience || 1.0,
+            })
+          } catch (err) {
+            logger.warn('Hydration', 'Could not add assessed skill', { skill: item.skillName, error: err.message })
+          }
+        } else if (typeof item === 'string' && item.trim()) {
+          try {
+            await skillsApi.add({
+              skillName: item.trim(),
+              category: 'Other',
+              proficiency: 75,
+              yearsExperience: 1.0,
+            })
+          } catch (err) {}
+        }
+      }
       checkpoint('skillsSaved')
     }
     if (resume?.fileName && !complete('resumeUploaded')) {
@@ -308,6 +325,7 @@ export const analyticsApi = {
 export const aiApi = {
   resumeReview: () => api.post('/ai/resume-review'),
   skillGap: (jobDescription) => api.post('/ai/skill-gap', { jobDescription }),
+  verifyLinkedInScreenshot: (payload) => api.post('/ai/verify-linkedin-screenshot', payload),
   chat: (message) => api.post('/ai/chat', { message }, { timeout: 60000 }),
   history: () => api.get('/ai/history'),
 }

@@ -1,25 +1,37 @@
 import { useEffect, useState } from 'react'
-import { profileApi } from '../services/api'
-import { User, GraduationCap, Target, Code2, Phone, MapPin, Loader2, Sparkles } from 'lucide-react'
-import { Linkedin, Github } from '../components/Icons'
+import { Link, useNavigate } from 'react-router-dom'
+import { profileApi, linkedinApi } from '../services/api'
+import { User, GraduationCap, Target, Phone, MapPin, Loader2, Sparkles, CheckCircle2, AlertCircle, ExternalLink, Image as ImageIcon } from 'lucide-react'
+import { Github } from '../components/Icons'
+import { Linkedin } from '../components/Icons'
 import { toast } from 'sonner'
 import { useAuth } from '../context/AuthContext'
 import AccountSearchInput from '../components/AccountSearchInput'
 
-
 export default function ProfilePage() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [form, setForm] = useState({
     name: '', education: '', targetRole: '', linkedinUrl: '',
     githubUsername: '', leetcodeUsername: '', bio: '', phone: '', location: ''
   })
+  const [linkedinData, setLinkedinData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    profileApi.get()
-      .then(r => setForm(prev => ({ ...prev, ...r.data })))
-      .catch(() => {})
+    Promise.all([
+      profileApi.get().catch(() => ({ data: {} })),
+      linkedinApi.get().catch(() => ({ data: null }))
+    ])
+      .then(([profRes, linkRes]) => {
+        if (profRes.data) {
+          setForm(prev => ({ ...prev, ...profRes.data }))
+        }
+        if (linkRes?.data) {
+          setLinkedinData(linkRes.data)
+        }
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -43,6 +55,8 @@ export default function ProfilePage() {
       {[...Array(4)].map((_, i) => <div key={i} className="skeleton h-16 rounded-xl" />)}
     </div>
   )
+
+  const isLinkedInVerified = !!(form.linkedinUrl || linkedinData?.profileUrl)
 
   return (
     <div className="max-w-2xl space-y-6 animate-fade-in">
@@ -120,10 +134,10 @@ export default function ProfilePage() {
         <div className="card p-6 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-              <Linkedin size={15} className="text-blue-600" /> Social & Coding Accounts
+              <Github size={16} className="text-slate-800" /> Coding Accounts
             </h3>
             <span className="text-xs text-slate-400 flex items-center gap-1">
-              <Sparkles size={12} className="text-blue-500" /> Live search & verification
+              <Sparkles size={12} className="text-blue-500" /> Live verification
             </span>
           </div>
 
@@ -147,14 +161,80 @@ export default function ProfilePage() {
               placeholder="Enter LeetCode username..."
               onChange={(val) => setForm(prev => ({ ...prev, leetcodeUsername: val }))}
             />
+          </div>
+        </div>
 
-            <AccountSearchInput
-              platform="linkedin"
-              label="LinkedIn Profile (URL or handle)"
-              value={form.linkedinUrl}
-              placeholder="https://linkedin.com/in/yourname or username"
-              onChange={(val) => setForm(prev => ({ ...prev, linkedinUrl: val }))}
-            />
+        {/* LinkedIn Profile Completion via AI Screenshot Only */}
+        <div className="card p-6 border-blue-100 bg-gradient-to-b from-white to-blue-50/20">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+              <Linkedin size={16} className="text-[#0A66C2]" /> LinkedIn Verification (Profile Completion)
+            </h3>
+            {isLinkedInVerified ? (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                <CheckCircle2 size={13} className="text-emerald-600" /> Screenshot Verified
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-full">
+                <AlertCircle size={13} className="text-amber-600" /> Action Required
+              </span>
+            )}
+          </div>
+
+          <p className="text-xs text-slate-600 mb-4 leading-relaxed">
+            To ensure profile authenticity, LinkedIn information can only be added or updated by uploading authentic screenshots of your LinkedIn profile in the AI Assistant.
+          </p>
+
+          {isLinkedInVerified ? (
+            <div className="p-3.5 bg-white rounded-xl border border-blue-200/60 shadow-sm space-y-2 mb-4">
+              <div className="flex items-center justify-between">
+                <div className="font-semibold text-sm text-slate-900 truncate max-w-[320px]">
+                  {linkedinData?.headline || form.targetRole || 'Verified LinkedIn Profile'}
+                </div>
+                {(form.linkedinUrl || linkedinData?.profileUrl) && (
+                  <a
+                    href={form.linkedinUrl || linkedinData?.profileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                  >
+                    View <ExternalLink size={12} />
+                  </a>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 truncate">
+                {form.linkedinUrl || linkedinData?.profileUrl || 'Profile details imported'}
+              </p>
+              {linkedinData?.topSkills && linkedinData.topSkills.length > 0 && (
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {linkedinData.topSkills.slice(0, 5).map(s => (
+                    <span key={s} className="text-[10px] px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-medium">
+                      {s}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="p-3.5 bg-amber-50/50 border border-amber-200/60 rounded-xl mb-4 text-xs text-amber-800">
+              No LinkedIn screenshot verified yet. Use the AI Assistant to upload a screenshot of your LinkedIn profile header or experience section.
+            </div>
+          )}
+
+          <div className="flex items-center justify-between pt-1">
+            <button
+              type="button"
+              onClick={() => navigate('/ai?tool=linkedin_screenshot')}
+              className="btn btn-secondary btn-sm gap-2 text-blue-700 border-blue-200 hover:bg-blue-50"
+            >
+              <ImageIcon size={14} className="text-blue-600" />
+              {isLinkedInVerified ? 'Update via LinkedIn Screenshot' : 'Upload & Verify LinkedIn Screenshot'}
+            </button>
+            {isLinkedInVerified && (
+              <Link to="/linkedin" className="text-xs font-semibold text-blue-600 hover:underline">
+                View Full LinkedIn Page →
+              </Link>
+            )}
           </div>
         </div>
 
